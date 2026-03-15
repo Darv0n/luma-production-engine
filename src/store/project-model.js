@@ -11,6 +11,31 @@
  */
 
 /**
+ * Default project settings — all overridable.
+ */
+export function createDefaultSettings() {
+  return {
+    mode: 'hybrid',          // 'manual' | 'hybrid' | 'auto'
+    auteur: 'none',          // 'none' | 'ai' | director id
+    mood: 'neutral',         // 'neutral' | 'intimate' | 'epic' | 'unsettling' | 'warm' | 'cold'
+    energy: 'building',      // 'still' | 'building' | 'urgent' | 'explosive'
+    hardStops: {
+      afterArc: false,       // pause after ARC for creative review
+      afterShots: false,     // pause after SHOTS for prompt review
+      beforeGenerate: true,  // pause before any API generation (REVIEW modal)
+    },
+    defaults: {
+      model: 'Ray3.14',
+      dynamicRange: 'standard',
+      cameraControl: null,
+      audioTemplate: '',
+      autoAudio: true,
+      autoUpscale: '1080p',
+    },
+  };
+}
+
+/**
  * Generate a simple unique ID (no external dependency).
  */
 export function generateId() {
@@ -37,8 +62,9 @@ export function createProject(inputs, name) {
       product: inputs.product || "",
       targetDuration: inputs.targetDuration || "30 seconds",
     },
-    characters: [], // Phase 2D: [{ name: string, description: string }]
+    characters: [], // [{ name, description, imageBase64?, imageExt? }]
     runs: [],
+    settings: createDefaultSettings(),
   };
 }
 
@@ -62,6 +88,7 @@ export function createRun(stageData, shots, validations, schema) {
     shots: shots || [],
     validations: validations || [],
     schema: schema || "",
+    drafts: {}, // { [idx]: { id, state, videoUrl, approved } } — populated by draft generation
   };
 }
 

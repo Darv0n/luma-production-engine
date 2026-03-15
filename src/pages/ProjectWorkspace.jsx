@@ -6,7 +6,7 @@ import { validatePrompt } from "../lib/validator.js";
 import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
 import { storage } from "../store/storage.js";
-import { createProject, createRun, latestRun } from "../store/project-model.js";
+import { createProject, createRun, latestRun, createDefaultSettings } from "../store/project-model.js";
 import PipelineProgress from "../components/PipelineProgress.jsx";
 import LiveResults from "../components/LiveResults.jsx";
 import SchemaOutput from "../components/SchemaOutput.jsx";
@@ -33,11 +33,11 @@ export default function ProjectWorkspace() {
   // ─── Project display state (derived from storage, for header) ─────────────
   const [projectName, setProjectName] = useState(null);
   const [runCount, setRunCount] = useState(0);
+  const [currentRunId, setCurrentRunId] = useState(null);
 
   // ─── Load project on route change ────────────────────────────────────────
   useEffect(() => {
     if (!id || id === "new") {
-      // Blank workspace
       setConcept("");
       setFormat("30s");
       setProduct("");
@@ -51,39 +51,47 @@ export default function ProjectWorkspace() {
       return;
     }
 
-    const project = storage.getProject(id);
-    if (!project) {
-      navigate("/projects", { replace: true });
-      return;
-    }
+    storage.getProject(id).then((project) => {
+      if (!project) {
+        navigate("/projects", { replace: true });
+        return;
+      }
+      setConcept(project.inputs.concept);
+      setFormat(project.inputs.format);
+      setProduct(project.inputs.product);
+      setTargetDuration(project.inputs.targetDuration);
+      setProjectName(project.name);
+      setRunCount(project.runs?.length || 0);
+      setError(null);
+      setPipelineStage("idle");
 
-    setConcept(project.inputs.concept);
-    setFormat(project.inputs.format);
-    setProduct(project.inputs.product);
-    setTargetDuration(project.inputs.targetDuration);
-    setProjectName(project.name);
-    setRunCount(project.runs?.length || 0);
-    setError(null);
-    setPipelineStage("idle");
-
-    const latest = latestRun(project);
-    if (latest) {
-      setFinalResult({
-        analysis: latest.stageData.scan,
-        arcData: latest.stageData.arc,
-        shots: latest.shots,
-        validations: latest.validations,
-      });
-      setStageData({ scan: latest.stageData.scan, arc: latest.stageData.arc });
-    } else {
-      setFinalResult(null);
-      setStageData({});
-    }
+      const latest = latestRun(project);
+      if (latest) {
+        setFinalResult({
+          analysis: latest.stageData.scan,
+          arcData: latest.stageData.arc,
+          shots: latest.shots,
+          validations: latest.validations,
+          drafts: latest.drafts || {},
+        });
+        setStageData({ scan: latest.stageData.scan, arc: latest.stageData.arc });
+        setCurrentRunId(latest.id);
+        setCharacters(project.characters || []);
+        setProjectSettings(project.settings || createDefaultSettings());
+      } else {
+        setFinalResult(null);
+        setStageData({});
+        setCurrentRunId(null);
+        setCharacters(project.characters || []);
+        setProjectSettings(project.settings || createDefaultSettings());
+      }
+    });
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Current project's characters ─────────────────────────────────────────
-  const activeProject = id && id !== "new" ? storage.getProject(id) : null;
-  const characters = activeProject?.characters || [];
+  // ─── Current project's characters + settings ──────────────────────────────
+  const [characters, setCharacters] = useState([]);
+  const [projectSettings, setProjectSettings] = useState(createDefaultSettings());
+  const [arcApprovalResolve, setArcApprovalResolve] = useState(null);
 
   // ─── Pipeline run ─────────────────────────────────────────────────────────
   const handleRun = async () => {
@@ -99,17 +107,32 @@ export default function ProjectWorkspace() {
 
     const capturedStageData = {};
 
+    // Hard stop resolver — set by the gate UI when afterArc triggers
+    let arcApprovalResolve = null;
+
     try {
       const result = await runPipeline(
         concept,
         format,
         product,
         targetDuration,
-        (stage, data) => {
-          setPipelineStage(stage);
-          if (data) {
-            setStageData((prev) => ({ ...prev, [stage]: data }));
-            capturedStageData[stage] = data;
+        async (stage, data) => {
+          if (stage !== 'arc:complete') {
+            setPipelineStage(stage);
+            if (data) {
+              setStageData((prev) => ({ ...prev, [stage]: data }));
+              capturedStageData[stage] = data;
+            }
+            return;
+          }
+          // arc:complete — check hard stop
+          if (projectSettings?.hardStops?.afterArc) {
+            setPipelineStage("arc:paused");
+            await new Promise((resolve) => {
+              arcApprovalResolve = resolve;
+              setArcApprovalResolve(() => resolve);
+            });
+            setPipelineStage("shots");
           }
         },
         { characters }
@@ -126,7 +149,7 @@ export default function ProjectWorkspace() {
   };
 
   // ─── Auto-save ────────────────────────────────────────────────────────────
-  const autoSave = (result, capturedStageData, projectIdAtStart) => {
+  const autoSave = async (result, capturedStageData, projectIdAtStart) => {
     try {
       const schema = buildFullSchema(
         concept, format, product, targetDuration,
@@ -141,23 +164,23 @@ export default function ProjectWorkspace() {
 
       if (!projectIdAtStart) {
         const newProject = createProject({ concept, format, product, targetDuration });
-        storage.saveProject(newProject);
-        storage.addRun(newProject.id, run);
+        await storage.saveProject(newProject);
+        await storage.addRun(newProject.id, run);
         setProjectName(newProject.name);
         setRunCount(1);
+        setCurrentRunId(run.id);
         refresh();
         navigate(`/projects/${newProject.id}`, { replace: true });
       } else {
-        storage.addRun(projectIdAtStart, run);
-        const updated = storage.getProject(projectIdAtStart);
+        await storage.addRun(projectIdAtStart, run);
+        const updated = await storage.getProject(projectIdAtStart);
         setRunCount(updated?.runs?.length || 0);
+        setCurrentRunId(run.id);
         refresh();
       }
     } catch (e) {
       console.error("Auto-save failed:", e.message);
-      if (e.message.includes("quota")) {
-        setError("Storage quota exceeded. Delete old projects to continue saving.");
-      }
+      setError("Auto-save failed: " + e.message);
     }
   };
 
@@ -193,8 +216,8 @@ export default function ProjectWorkspace() {
           newValidations,
           schema
         );
-        storage.addRun(currentId, run);
-        const updated = storage.getProject(currentId);
+        await storage.addRun(currentId, run);
+        const updated = await storage.getProject(currentId);
         setRunCount(updated?.runs?.length || 0);
         refresh();
       }
@@ -207,10 +230,41 @@ export default function ProjectWorkspace() {
 
   // ─── Manual shot edit ─────────────────────────────────────────────────────
   const handleUpdateShot = (idx, updatedShot) => {
-    if (!finalResult) return;
-    const newShots = finalResult.shots.map((s, i) => (i === idx ? updatedShot : s));
-    const newValidations = newShots.map((s) => validatePrompt(s.prompt));
-    setFinalResult({ ...finalResult, shots: newShots, validations: newValidations });
+    setFinalResult((prev) => {
+      if (!prev) return prev;
+      const newShots = prev.shots.map((s, i) => (i === idx ? updatedShot : s));
+      return { ...prev, shots: newShots, validations: newShots.map((s) => validatePrompt(s.prompt)) };
+    });
+  };
+
+  // Bulk replace all shots at once — used by auteur to avoid closure stale-state
+  const handleBulkUpdateShots = (updatedShots) => {
+    setFinalResult((prev) => {
+      if (!prev) return prev;
+      return { ...prev, shots: updatedShots, validations: updatedShots.map((s) => validatePrompt(s.prompt)) };
+    });
+  };
+
+  // ─── Draft persistence ────────────────────────────────────────────────────
+  const handleDraftsChange = async (drafts) => {
+    const projectId = id && id !== "new" ? id : null;
+    if (!projectId || !currentRunId) return;
+    const project = await storage.getProject(projectId);
+    if (!project) return;
+    const updatedRuns = project.runs.map((r) =>
+      r.id === currentRunId ? { ...r, drafts } : r
+    );
+    await storage.saveProject({ ...project, runs: updatedRuns });
+  };
+
+  // ─── Settings persistence ─────────────────────────────────────────────────
+  const handleUpdateSettings = async (newSettings) => {
+    setProjectSettings(newSettings);
+    const projectId = id && id !== "new" ? id : null;
+    if (!projectId) return;
+    const project = await storage.getProject(projectId);
+    if (!project) return;
+    await storage.saveProject({ ...project, settings: newSettings, updatedAt: new Date().toISOString() });
   };
 
   // ─── Reset to re-run on same project ─────────────────────────────────────
@@ -446,8 +500,43 @@ export default function ProjectWorkspace() {
       )}
 
       {/* Pipeline progress */}
-      {pipelineStage !== "idle" && !finalResult && (
+      {pipelineStage !== "idle" && pipelineStage !== "arc:paused" && !finalResult && (
         <PipelineProgress currentStage={pipelineStage} stageData={stageData} />
+      )}
+
+      {/* Arc hard stop gate */}
+      {pipelineStage === "arc:paused" && arcApprovalResolve && (
+        <div style={{
+          padding: "16px 20px",
+          background: "rgba(184,156,74,0.06)",
+          border: "1px solid rgba(184,156,74,0.2)",
+          borderRadius: "3px",
+          marginBottom: "12px",
+        }}>
+          <div style={{ ...S.mono, fontSize: "9px", color: "#b89c4a", letterSpacing: "2px", marginBottom: "8px" }}>
+            ⏸ ARC HARD STOP — review before shot generation
+          </div>
+          <div style={{ ...S.mono, fontSize: "10px", color: "#e8e4de", marginBottom: "4px" }}>
+            {stageData.arc?.shape} · {stageData.arc?.openingState} → {stageData.arc?.floor} → <strong>{stageData.arc?.pivotImage}</strong> → {stageData.arc?.terminalState}
+          </div>
+          <div style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", marginBottom: "12px" }}>
+            Handle: "{stageData.scan?.handle}"
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={() => { arcApprovalResolve(); setArcApprovalResolve(null); }}
+              style={{ ...S.btnSec, fontSize: "9px", padding: "8px 20px", color: "#5a9a6a", borderColor: "rgba(90,154,106,0.3)" }}
+            >
+              ✓ APPROVE — GENERATE SHOTS
+            </button>
+            <button
+              onClick={() => { setError("Pipeline stopped at arc review."); setRunning(false); setArcApprovalResolve(null); setPipelineStage("idle"); }}
+              style={{ ...S.btnSec, fontSize: "9px", padding: "8px 16px" }}
+            >
+              STOP
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Live results */}
@@ -505,12 +594,18 @@ export default function ProjectWorkspace() {
           <SchemaOutput
             result={finalResult}
             onUpdateShot={handleUpdateShot}
+            onBulkUpdateShots={handleBulkUpdateShots}
             onRerunShot={handleRerunShot}
             rerunningShot={rerunningShot}
             concept={concept}
             format={format}
             product={product}
             targetDuration={targetDuration}
+            initialDrafts={finalResult.drafts || {}}
+            onDraftsChange={handleDraftsChange}
+            characters={characters}
+            projectSettings={projectSettings}
+            onUpdateSettings={handleUpdateSettings}
           />
         </div>
       )}

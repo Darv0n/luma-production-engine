@@ -130,5 +130,15 @@ export function normalizeShots(shots, defaultModel, suggestedAspect) {
     cutType: s.cutType || "",
     postNotes: s.postNotes || "",
     change: s.change || "",
+    // ─── SETUP panel fields ───────────────────────────────────────────────
+    cameraControl: s.cameraControl || null,          // camera control preset id
+    dynamicRange: s.dynamicRange || "standard",      // "standard" | "hdr"
+    enhance: s.enhance !== false,                    // prompt enhancement (default on)
+    audioPrompt: s.audioPrompt || s.audio || "",     // audio generation prompt
+    negativeAudioPrompt: s.negativeAudioPrompt || "music, speech, sound effects",
+    autoUpscale: s.autoUpscale || "1080p",           // null | "720p" | "1080p" | "4k"
+    autoAudio: s.autoAudio !== false,                // chain audio after final render
+    autoExtend: s.autoExtend || false,               // chain to next shot via last_frame
+    auteurMode: s.auteurMode || "none",              // "none" | "user" | "ai" (future)
   }));
 }

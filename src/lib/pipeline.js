@@ -26,8 +26,9 @@ import { FIX_SYSTEM, buildFixUser, applyFixes } from "../prompts/fix.js";
  * @param {string} format - Format (15s, 30s, 60s, social, cinematic, product)
  * @param {string} product - Product being advertised (or empty)
  * @param {string} targetDuration - Target duration string
- * @param {Function} onStage - Callback: (stageName, data|null) => void
+ * @param {Function} onStage - Callback: (stageName, data|null) => void | Promise<void>
  *   Called with null when a stage starts, with data when it completes.
+ *   If it returns a Promise, the pipeline awaits it — enabling hard stop gates.
  * @param {Object} [options]
  * @param {Array} [options.characters] - Pre-registered characters for this project
  * @returns {Promise<{analysis, arcData, shots, validations}>}
@@ -41,25 +42,27 @@ export async function runPipeline(
   { characters = [] } = {}
 ) {
   // ─── STAGE 1: SCAN + TENSION ──────────────────────────────────────
-  onStage("scan", null);
+  await onStage("scan", null);
   let analysis = await callAPI(
     SCAN_SYSTEM,
     buildScanUser(concept, format, product, targetDuration)
   );
   analysis = normalizeScan(analysis);
-  onStage("scan", analysis);
+  await onStage("scan", analysis);
 
   // ─── STAGE 2: EMOTIONAL ARC ───────────────────────────────────────
-  onStage("arc", null);
+  await onStage("arc", null);
   let arcData = await callAPI(
     ARC_SYSTEM,
     buildArcUser(concept, format, product, analysis)
   );
   arcData = normalizeArc(arcData);
-  onStage("arc", arcData);
+  // Hard stop gate point — onStage may return a Promise that resolves on approval
+  await onStage("arc:complete", arcData);
+  await onStage("arc", arcData);
 
   // ─── STAGE 3: SHOT GENERATION ─────────────────────────────────────
-  onStage("shots", null);
+  await onStage("shots", null);
   const defaultModel = analysis.needsCharacterRef ? "Ray3" : "Ray3.14";
   const rawShots = await callAPI(
     SHOTS_SYSTEM,

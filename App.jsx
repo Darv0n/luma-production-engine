@@ -9,7 +9,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { S, GLOBAL_CSS } from "./src/styles/theme.js";
-import { storage } from "./src/store/storage.js";
+import { storage, migrateFromLocalStorage } from "./src/store/storage.js";
 import ProjectSidebar from "./src/components/ProjectSidebar.jsx";
 import Dashboard from "./src/pages/Dashboard.jsx";
 import ProjectWorkspace from "./src/pages/ProjectWorkspace.jsx";
@@ -22,11 +22,18 @@ function Layout() {
   const [projects, setProjects] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const refresh = useCallback(() => setProjects(storage.getProjects()), []);
+  const refresh = useCallback(async () => {
+    const list = await storage.getProjects();
+    setProjects(list);
+  }, []);
 
-  // Load projects on mount + inject global CSS
+  // Load projects on mount + inject global CSS + migrate localStorage
   useEffect(() => {
-    refresh();
+    const init = async () => {
+      await migrateFromLocalStorage();
+      await refresh();
+    };
+    init();
     const style = document.createElement("style");
     style.textContent = GLOBAL_CSS;
     document.head.appendChild(style);
@@ -42,24 +49,24 @@ function Layout() {
   const handleLoad = (id) => navigate(`/projects/${id}`);
   const handleNew = () => navigate("/projects/new");
 
-  const handleRename = (id, name) => {
-    const p = storage.getProject(id);
+  const handleRename = async (id, name) => {
+    const p = await storage.getProject(id);
     if (!p) return;
-    storage.saveProject({ ...p, name, updatedAt: new Date().toISOString() });
+    await storage.saveProject({ ...p, name, updatedAt: new Date().toISOString() });
     refresh();
   };
 
-  const handleDelete = (id) => {
-    storage.deleteProject(id);
+  const handleDelete = async (id) => {
+    await storage.deleteProject(id);
     if (activeId === id) navigate("/projects");
     refresh();
   };
 
-  const handleAddChar = (projectId, char) => {
-    const p = storage.getProject(projectId);
+  const handleAddChar = async (projectId, char) => {
+    const p = await storage.getProject(projectId);
     if (!p) return;
     if ((p.characters || []).some((c) => c.name === char.name)) return;
-    storage.saveProject({
+    await storage.saveProject({
       ...p,
       characters: [...(p.characters || []), char],
       updatedAt: new Date().toISOString(),
@@ -67,12 +74,25 @@ function Layout() {
     refresh();
   };
 
-  const handleRemoveChar = (projectId, charName) => {
-    const p = storage.getProject(projectId);
+  const handleRemoveChar = async (projectId, charName) => {
+    const p = await storage.getProject(projectId);
     if (!p) return;
-    storage.saveProject({
+    await storage.saveProject({
       ...p,
       characters: (p.characters || []).filter((c) => c.name !== charName),
+      updatedAt: new Date().toISOString(),
+    });
+    refresh();
+  };
+
+  const handleUpdateChar = async (projectId, charName, patch) => {
+    const p = await storage.getProject(projectId);
+    if (!p) return;
+    await storage.saveProject({
+      ...p,
+      characters: (p.characters || []).map((c) =>
+        c.name === charName ? { ...c, ...patch } : c
+      ),
       updatedAt: new Date().toISOString(),
     });
     refresh();
@@ -126,6 +146,7 @@ function Layout() {
           onDelete={handleDelete}
           onAddCharacter={handleAddChar}
           onRemoveCharacter={handleRemoveChar}
+          onUpdateCharacter={handleUpdateChar}
         />
       </div>
 

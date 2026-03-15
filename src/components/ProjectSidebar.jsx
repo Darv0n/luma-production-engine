@@ -33,6 +33,7 @@ export default function ProjectSidebar({
   onDelete,
   onAddCharacter,
   onRemoveCharacter,
+  onUpdateCharacter,
 }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
@@ -232,34 +233,84 @@ export default function ProjectSidebar({
               None registered
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "8px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "8px" }}>
               {(activeProject.characters || []).map((c) => (
                 <div
                   key={c.name}
                   style={{
-                    ...ROW,
-                    justifyContent: "space-between",
-                    padding: "4px 8px",
+                    padding: "6px 8px",
                     background: "rgba(232,228,222,0.03)",
                     borderRadius: "2px",
+                    border: "1px solid rgba(232,228,222,0.06)",
                   }}
                 >
-                  <div>
-                    <div style={{ ...S.mono, fontSize: "9px", color: COLORS.textMid }}>
-                      @{c.name}
+                  <div style={{ ...ROW, justifyContent: "space-between", marginBottom: "4px" }}>
+                    <div>
+                      <div style={{ ...S.mono, fontSize: "9px", color: COLORS.textMid }}>
+                        @{c.name}
+                      </div>
+                      {c.description && (
+                        <div style={{ ...S.mono, fontSize: "8px", color: COLORS.textDim }}>
+                          {c.description}
+                        </div>
+                      )}
                     </div>
-                    {c.description && (
-                      <div style={{ ...S.mono, fontSize: "8px", color: COLORS.textDim }}>
-                        {c.description}
+                    <button
+                      onClick={() => onRemoveCharacter(activeProject.id, c.name)}
+                      style={{ ...S.btnSec, fontSize: "8px", padding: "1px 5px", border: "none", background: "transparent", opacity: 0.4 }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Char ref photo */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {c.imageBase64 ? (
+                      <img
+                        src={`data:image/${c.imageExt || "jpeg"};base64,${c.imageBase64}`}
+                        alt={c.name}
+                        style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "2px", flexShrink: 0 }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: "36px", height: "36px", borderRadius: "2px", flexShrink: 0,
+                        background: "rgba(232,228,222,0.04)", border: "1px dashed rgba(232,228,222,0.12)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        ...S.mono, fontSize: "8px", color: "rgba(232,228,222,0.2)",
+                      }}>
+                        ☻
                       </div>
                     )}
+                    <label style={{ cursor: "pointer", flex: 1 }}>
+                      <span style={{
+                        ...S.mono, fontSize: "8px", letterSpacing: "1px",
+                        color: c.imageBase64 ? "#5a9a6a" : "rgba(232,228,222,0.35)",
+                        padding: "3px 6px",
+                        border: `1px solid ${c.imageBase64 ? "rgba(90,154,106,0.3)" : "rgba(232,228,222,0.1)"}`,
+                        borderRadius: "2px",
+                        display: "block",
+                        textAlign: "center",
+                      }}>
+                        {c.imageBase64 ? "✓ PHOTO" : "+ PHOTO"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !onUpdateCharacter) return;
+                          const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const base64 = ev.target.result.split(",")[1];
+                            onUpdateCharacter(activeProject.id, c.name, { imageBase64: base64, imageExt: ext });
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
                   </div>
-                  <button
-                    onClick={() => onRemoveCharacter(activeProject.id, c.name)}
-                    style={{ ...S.btnSec, fontSize: "8px", padding: "1px 5px", border: "none", background: "transparent", opacity: 0.4 }}
-                  >
-                    ✕
-                  </button>
                 </div>
               ))}
             </div>
