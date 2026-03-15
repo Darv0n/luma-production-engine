@@ -1,12 +1,14 @@
 {
   "name": "luma-production-engine",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "AI-native production system for Luma Dream Machine. Concept to finished ad in under an hour.",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "session": "node -e \"const{chromium}=require('playwright');chromium.launchPersistentContext('.playwright-session',{headless:false,viewport:{width:1280,height:800}}).then(async c=>{const p=await c.newPage();await p.goto('https://dream-machine.lumalabs.ai/account/subscription');setTimeout(()=>c.close(),300000)});\""
   },
   "dependencies": {
     "lowdb": "^7.0.1",
