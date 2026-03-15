@@ -28,6 +28,26 @@ export default function SchemaOutput({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadSchema = () => {
+    const blob = new Blob([schema], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `luma-schema-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadJSON = () => {
+    const blob = new Blob([JSON.stringify(shots, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `luma-shots-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleCopyPrompt = (i) => {
     navigator.clipboard.writeText(shots[i]?.prompt || "");
     setCopiedIdx(i);
@@ -49,13 +69,21 @@ export default function SchemaOutput({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Action bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ ...S.mono, fontSize: "10px", ...S.dim, letterSpacing: "1px" }}>
           {shots.length} SHOTS · {estimateCredits(shots).toLocaleString()} CREDITS
         </div>
-        <button onClick={handleCopyAll} style={S.btnPrimary}>
-          {copied ? "✓ COPIED FULL SCHEMA" : "⧉ COPY PRODUCTION SCHEMA"}
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={handleDownloadJSON} style={{ ...S.btnSec, fontSize: "9px", padding: "8px 14px" }}>
+            ↓ JSON
+          </button>
+          <button onClick={handleDownloadSchema} style={{ ...S.btnSec, fontSize: "9px", padding: "8px 14px" }}>
+            ↓ .TXT
+          </button>
+          <button onClick={handleCopyAll} style={S.btnPrimary}>
+            {copied ? "✓ COPIED FULL SCHEMA" : "⧉ COPY PRODUCTION SCHEMA"}
+          </button>
+        </div>
       </div>
 
       {/* Per-shot cards */}
