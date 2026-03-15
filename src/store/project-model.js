@@ -63,6 +63,7 @@ export function createProject(inputs, name) {
       targetDuration: inputs.targetDuration || "30 seconds",
     },
     characters: [], // [{ name, description, imageBase64?, imageExt? }]
+    keyframes: [],  // [{ id, name, type, prompt, imageUrl, aspectRatio }]
     runs: [],
     settings: createDefaultSettings(),
   };

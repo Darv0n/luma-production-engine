@@ -26,9 +26,11 @@ const DURATION_MAP = {
 /**
  * Map a shot object to Luma API VideoCreateParams.
  * Always submits at 540p for draft iteration.
- * Passes camera_control and dynamic_range as extra fields if set.
+ *
+ * @param {Object} shot
+ * @param {string|null} keyframeImageUrl — if set, use as frame0 (I2V instead of T2V)
  */
-export function toApiParams(shot) {
+export function toApiParams(shot, keyframeImageUrl = null) {
   const model = MODEL_MAP[shot.model] || 'ray-flash-2';
   const duration = DURATION_MAP[shot.duration] || '5s';
   const aspect_ratio = shot.aspect || '16:9';
@@ -42,23 +44,26 @@ export function toApiParams(shot) {
     loop: shot.loop || false,
   };
 
-  // Pass HDR and camera control as extra fields — accepted by the API
-  if (shot.dynamicRange === 'hdr') {
-    params.dynamic_range = 'hdr';
+  // If a keyframe image exists, use I2V — the model animates from visual truth
+  if (keyframeImageUrl) {
+    params.keyframes = {
+      frame0: { type: 'image', url: keyframeImageUrl },
+    };
   }
-  if (shot.cameraControl) {
-    params.camera_control = { type: shot.cameraControl };
-  }
+
+  if (shot.dynamicRange === 'hdr') params.dynamic_range = 'hdr';
+  if (shot.cameraControl) params.camera_control = { type: shot.cameraControl };
 
   return params;
 }
 
 /**
  * Submit a single shot for draft generation.
- * Returns the generation object { id, state, ... }
+ * @param {Object} shot
+ * @param {string|null} keyframeImageUrl — if provided, I2V from keyframe instead of T2V
  */
-export async function submitDraft(shot) {
-  const params = toApiParams(shot);
+export async function submitDraft(shot, keyframeImageUrl = null) {
+  const params = toApiParams(shot, keyframeImageUrl);
 
   const res = await fetch('/api/luma/generate', {
     method: 'POST',
@@ -143,6 +148,43 @@ export async function submitFinalRender(shot, draftId) {
  */
 export function needsCharacterRef(shot) {
   return shot.characterRef && shot.characterRef !== 'none';
+}
+
+// ─── Photon image generation (keyframe design) ────────────────────────────────
+
+/**
+ * Generate a Photon image synchronously.
+ * Used for keyframe design — create the object/character before animating it.
+ *
+ * @param {string} prompt — describe the object or character precisely
+ * @param {string} aspectRatio — default '9:16' for social vertical
+ * @param {string} model — 'photon-1' | 'photon-flash-1'
+ */
+export async function generateKeyframeImage(prompt, aspectRatio = '9:16', model = 'photon-1') {
+  const res = await fetch('/api/luma/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt,
+      aspect_ratio: aspectRatio,
+      sync: true,
+      sync_timeout: 60,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+    throw new Error(err?.error?.message || `Photon error ${res.status}`);
+  }
+
+  const gen = await res.json();
+  // Photon sync returns completed with assets.image
+  return {
+    id: gen.id,
+    imageUrl: gen.assets?.image || null,
+    state: gen.state,
+  };
 }
 
 // ─── Post-chain operations ────────────────────────────────────────────────────

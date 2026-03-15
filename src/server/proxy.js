@@ -120,6 +120,26 @@ export function createLumaMiddleware(lumaKey) {
       return;
     }
 
+    // POST /api/luma/image → POST /generations/image (Photon keyframe design)
+    if (req.url === '/image' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const upstream = await fetch(`${LUMA_BASE}/generations/image`, {
+            method: 'POST', headers, body,
+          });
+          const data = await upstream.text();
+          res.writeHead(upstream.status, { 'Content-Type': 'application/json' });
+          res.end(data);
+        } catch (e) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Luma proxy error: ' + e.message } }));
+        }
+      });
+      return;
+    }
+
     // POST /api/luma/audio/:id → POST /generations/:id/audio
     const audioMatch = req.url.match(/^\/audio\/([^/?]+)/);
     if (audioMatch && req.method === 'POST') {

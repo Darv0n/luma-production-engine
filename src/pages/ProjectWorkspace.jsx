@@ -77,12 +77,14 @@ export default function ProjectWorkspace() {
         setStageData({ scan: latest.stageData.scan, arc: latest.stageData.arc });
         setCurrentRunId(latest.id);
         setCharacters(project.characters || []);
+        setProjectKeyframes(project.keyframes || []);
         setProjectSettings(project.settings || createDefaultSettings());
       } else {
         setFinalResult(null);
         setStageData({});
         setCurrentRunId(null);
         setCharacters(project.characters || []);
+        setProjectKeyframes(project.keyframes || []);
         setProjectSettings(project.settings || createDefaultSettings());
       }
     });
@@ -90,6 +92,7 @@ export default function ProjectWorkspace() {
 
   // ─── Current project's characters + settings ──────────────────────────────
   const [characters, setCharacters] = useState([]);
+  const [projectKeyframes, setProjectKeyframes] = useState([]);
   const [projectSettings, setProjectSettings] = useState(createDefaultSettings());
   const [arcApprovalResolve, setArcApprovalResolve] = useState(null);
 
@@ -255,6 +258,16 @@ export default function ProjectWorkspace() {
       r.id === currentRunId ? { ...r, drafts } : r
     );
     await storage.saveProject({ ...project, runs: updatedRuns });
+  };
+
+  // ─── Keyframe persistence ─────────────────────────────────────────────────
+  const handleUpdateKeyframes = async (keyframes) => {
+    setProjectKeyframes(keyframes);
+    const projectId = id && id !== "new" ? id : null;
+    if (!projectId) return;
+    const project = await storage.getProject(projectId);
+    if (!project) return;
+    await storage.saveProject({ ...project, keyframes, updatedAt: new Date().toISOString() });
   };
 
   // ─── Settings persistence ─────────────────────────────────────────────────
@@ -606,6 +619,8 @@ export default function ProjectWorkspace() {
             characters={characters}
             projectSettings={projectSettings}
             onUpdateSettings={handleUpdateSettings}
+            projectKeyframes={projectKeyframes}
+            onUpdateKeyframes={handleUpdateKeyframes}
           />
         </div>
       )}

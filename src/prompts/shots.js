@@ -140,5 +140,6 @@ export function normalizeShots(shots, defaultModel, suggestedAspect) {
     autoAudio: s.autoAudio !== false,                // chain audio after final render
     autoExtend: s.autoExtend || false,               // chain to next shot via last_frame
     auteurMode: s.auteurMode || "none",              // "none" | "user" | "ai" (future)
+    keyframeId: s.keyframeId || null,               // references project.keyframes[].id
   }));
 }

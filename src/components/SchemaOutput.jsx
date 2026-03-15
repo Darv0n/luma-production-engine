@@ -7,6 +7,7 @@ import { submitDraft, submitFinalRender, submitAudio, submitUpscale, pollGenerat
 import { buildPlatformBrief } from "../lib/platform-brief.js";
 import ShotSetup from "./ShotSetup.jsx";
 import ProjectSettings from "./ProjectSettings.jsx";
+import KeyframeDesign from "./KeyframeDesign.jsx";
 import { applyDirectorPreset, applyAiAuteur } from "../lib/auteur.js";
 
 const POLL_INTERVAL = 5000; // ms
@@ -27,6 +28,8 @@ export default function SchemaOutput({
   projectSettings = null,
   onUpdateSettings,
   onBulkUpdateShots,
+  projectKeyframes = [],
+  onUpdateKeyframes,
 }) {
   // Destructure result up front so hooks below can reference shots safely
   const { analysis, arcData, shots, validations } = result;
@@ -381,12 +384,17 @@ export default function SchemaOutput({
   const submitShot = useCallback(async (idx) => {
     updateDraft(idx, { state: "queued", id: null, videoUrl: null, error: null });
     try {
-      const gen = await submitDraft(shots[idx]);
+      // Resolve keyframe image URL if shot has one assigned
+      const shot = shots[idx];
+      const keyframeImageUrl = shot.keyframeId
+        ? projectKeyframes.find((k) => k.id === shot.keyframeId)?.imageUrl || null
+        : null;
+      const gen = await submitDraft(shot, keyframeImageUrl);
       updateDraft(idx, { state: gen.state || "queued", id: gen.id });
     } catch (e) {
       updateDraft(idx, { state: "failed", error: e.message });
     }
-  }, [shots, updateDraft]);
+  }, [shots, updateDraft, projectKeyframes]);
 
   const submitAll = useCallback(async () => {
     for (let i = 0; i < shots.length; i++) {
@@ -512,6 +520,16 @@ export default function SchemaOutput({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      {/* Keyframe Design */}
+      <KeyframeDesign
+        keyframes={projectKeyframes}
+        shots={shots}
+        onUpdateKeyframes={onUpdateKeyframes}
+        onUpdateShotKeyframe={(idx, keyframeId) => {
+          if (onUpdateShot) onUpdateShot(idx, { ...shots[idx], keyframeId });
+        }}
+      />
 
       {/* Project Settings */}
       {projectSettings && (
