@@ -7,9 +7,29 @@ import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
 import { storage } from "../store/storage.js";
 import { createProject, createRun, latestRun, createDefaultSettings } from "../store/project-model.js";
+import { DIRECTORS } from "../lib/auteur.js";
 import PipelineProgress from "../components/PipelineProgress.jsx";
 import LiveResults from "../components/LiveResults.jsx";
 import SchemaOutput from "../components/SchemaOutput.jsx";
+import CreativeDirection from "../components/CreativeDirection.jsx";
+
+function buildCreativeDirection(settings) {
+  if (!settings) return null;
+  const { mood, energy, auteur } = settings;
+  const isDefault = mood === 'neutral' && energy === 'building' && (!auteur || auteur === 'none');
+  if (isDefault) return null;
+  const director = auteur && auteur !== 'none' && auteur !== 'ai' ? DIRECTORS[auteur] : null;
+  return {
+    mood: mood || 'neutral',
+    energy: energy || 'building',
+    auteur: auteur || 'none',
+    auteurDescription: auteur === 'ai'
+      ? 'AI cinematographer — assigns camera language per emotional beat'
+      : director
+        ? `${director.name}: ${director.traits}`
+        : null,
+  };
+}
 
 export default function ProjectWorkspace() {
   const { id } = useParams();
@@ -138,7 +158,10 @@ export default function ProjectWorkspace() {
             setPipelineStage("shots");
           }
         },
-        { characters }
+        {
+          characters,
+          creativeDirection: buildCreativeDirection(projectSettings),
+        }
       );
 
       setFinalResult(result);
@@ -350,6 +373,14 @@ export default function ProjectWorkspace() {
             VIEW RUN HISTORY ({runCount} runs) →
           </Link>
         </div>
+      )}
+
+      {/* Creative Direction — pre-pipeline, always visible before run */}
+      {!finalResult && (
+        <CreativeDirection
+          settings={projectSettings}
+          onUpdate={handleUpdateSettings}
+        />
       )}
 
       {/* Input form */}

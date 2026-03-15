@@ -44,7 +44,7 @@ ABSOLUTE RULES — violating any of these produces unusable output:
 
 Return ONLY valid JSON array.`;
 
-export function buildShotsUser(concept, format, product, analysis, arcData, characters = []) {
+export function buildShotsUser(concept, format, product, analysis, arcData, characters = [], creativeDirection = null) {
   const defaultModel = analysis.needsCharacterRef ? "Ray3" : "Ray3.14";
 
   const characterHint = characters.length > 0
@@ -63,7 +63,12 @@ ${(arcData.beats || []).map((b, i) => `  ${i + 1}. [${((b.position || 0) * 100).
 PIVOT POSITION: ${arcData.pivotPosition}
 PIVOT IMAGE: "${arcData.pivotImage}"
 CONTRAST AT PIVOT: "${arcData.contrast}"
-${characterHint}
+${creativeDirection && (creativeDirection.mood !== 'neutral' || creativeDirection.energy !== 'building' || (creativeDirection.auteur && creativeDirection.auteur !== 'none')) ? `
+CREATIVE DIRECTION:
+  MOOD: ${creativeDirection.mood || 'neutral'}
+  ENERGY: ${creativeDirection.energy || 'building'}${creativeDirection.auteurDescription ? `
+  AUTEUR LENS: ${creativeDirection.auteurDescription}` : ''}
+` : ''}${characterHint}
 Generate exactly ${arcData.beats?.length || 6} shots mapping 1:1 to the arc beats above.
 
 For each shot, determine:
