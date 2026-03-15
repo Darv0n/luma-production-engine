@@ -55,6 +55,11 @@ export const storage = {
   async addRun(projectId, run) {
     return req('POST', `/runs/${projectId}`, run);
   },
+
+  /** Update dialogue state for a specific project run. */
+  async updateDialogues(projectId, runId, dialogues) {
+    return req('PATCH', `/dialogues/${projectId}/${runId}`, dialogues);
+  },
 };
 
 /**

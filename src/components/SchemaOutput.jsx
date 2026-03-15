@@ -3,13 +3,15 @@ import { S } from "../styles/theme.js";
 import { validatePrompt } from "../lib/validator.js";
 import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
-import { submitDraft, submitFinalRender, submitAudio, submitUpscale, pollGeneration, needsCharacterRef, checkPlatformSession, openPlatformLogin, submitCharRef, getLastFrameUrl, submitContinuousShot, submitReasoningShot, callPlatformBrainstorm } from "../lib/luma-client.js";
+import { submitDraft, submitFinalRender, submitAudio, submitUpscale, pollGeneration, needsCharacterRef, checkPlatformSession, openPlatformLogin, submitCharRef, getLastFrameUrl, submitContinuousShot, submitReasoningShot, callPlatformBrainstorm, generateKeyframeImage } from "../lib/luma-client.js";
 import { buildPlatformBrief } from "../lib/platform-brief.js";
 import ShotSetup from "./ShotSetup.jsx";
 import ProjectSettings from "./ProjectSettings.jsx";
 import KeyframeDesign from "./KeyframeDesign.jsx";
 import { applyDirectorPreset, applyAiAuteur, generateAuteurBrainstorm, evaluateBrainstormOptions, detectPivotShot, buildPivotPrompt } from "../lib/auteur.js";
 import { callAPI } from "../lib/api.js";
+import AuteurDialogue from "./AuteurDialogue.jsx";
+import { createShotDialogue } from "../lib/auteur-dialogue.js";
 
 const POLL_INTERVAL = 5000; // ms
 const ROW_INLINE = { display: "flex", alignItems: "center", flexWrap: "wrap" };
@@ -50,10 +52,15 @@ export default function SchemaOutput({
   // Stores last_frame URLs indexed by shot idx, populated after each final completes
   const lastFrameUrlsRef = useRef({});
 
-  // ─── Phase 2: Auteur Brainstorm ─────────────────────────────────────────────
+  // ─── Phase 2: Auteur Brainstorm (legacy — replaced by dialogue in Sprint 04)
   // { [idx]: { state, variations, selected, auteurPick } }
   const [brainstormStates, setBrainstormStates] = useState({});
   const [brainstormingIdx, setBrainstormingIdx] = useState(-1);
+
+  // ─── Sprint 04: Auteur Dialogue ────────────────────────────────────────────
+  // { [idx]: ShotDialogue }
+  const [dialogueStates, setDialogueStates] = useState({});
+  const [approvedDialogues, setApprovedDialogues] = useState([]);
 
   // ─── Phase 3: Pivot detection ───────────────────────────────────────────────
   const pivotIdx = detectPivotShot(shots, arcData);
@@ -361,6 +368,72 @@ export default function SchemaOutput({
     }
     setBrainstormStates((prev) => ({ ...prev, [idx]: { ...prev[idx], applied: variation } }));
   }, [shots, onUpdateShot]);
+
+  // ─── Sprint 04: Dialogue handlers ──────────────────────────────────────────
+
+  const handleOpenDialogue = useCallback((idx) => {
+    setDialogueStates((prev) => {
+      if (prev[idx]?.state === 'active' || prev[idx]?.state === 'approved') return prev;
+      return { ...prev, [idx]: createShotDialogue(idx) };
+    });
+    // Activate after state update
+    setTimeout(() => {
+      setDialogueStates((prev) => ({
+        ...prev,
+        [idx]: { ...(prev[idx] || createShotDialogue(idx)), state: 'active' },
+      }));
+    }, 0);
+  }, []);
+
+  const handleDialogueUpdate = useCallback((idx, updatedDialogue) => {
+    setDialogueStates((prev) => ({ ...prev, [idx]: updatedDialogue }));
+  }, []);
+
+  const handleDialogueApprove = useCallback((idx, approvedPrompt, approvedSettings) => {
+    // Update the shot with approved prompt + settings
+    if (onUpdateShot && shots[idx]) {
+      const updatedShot = {
+        ...shots[idx],
+        prompt: approvedPrompt,
+        ...(approvedSettings.cameraControl ? { cameraControl: approvedSettings.cameraControl } : {}),
+        ...(approvedSettings.dynamicRange ? { dynamicRange: approvedSettings.dynamicRange } : {}),
+        ...(approvedSettings.duration ? { duration: approvedSettings.duration } : {}),
+      };
+      onUpdateShot(idx, updatedShot);
+    }
+
+    // Add to approved dialogues for context building
+    const beat = arcData?.beats?.[shots[idx]?.beatIndex ?? idx];
+    setApprovedDialogues((prev) => [
+      ...prev,
+      {
+        shotIndex: idx,
+        name: shots[idx]?.name || `Shot ${idx + 1}`,
+        prompt: approvedPrompt,
+        settings: approvedSettings,
+        arcPosition: beat?.position,
+      },
+    ]);
+
+    // Auto-open next shot dialogue in HYBRID mode
+    const mode = projectSettings?.mode || 'hybrid';
+    if (mode === 'hybrid' && idx + 1 < shots.length) {
+      setTimeout(() => handleOpenDialogue(idx + 1), 300);
+    }
+    // AUTO mode: auto-approve after proposal (handled in AuteurDialogue)
+  }, [shots, arcData, onUpdateShot, projectSettings, handleOpenDialogue]);
+
+  const handleGenerateKeyframeInDialogue = useCallback(async (prompt) => {
+    const result = await generateKeyframeImage(prompt);
+    return result?.imageUrl || null;
+  }, []);
+
+  // Build creative direction for dialogue context
+  const dialogueCreativeDirection = projectSettings ? {
+    mood: projectSettings.mood || 'neutral',
+    energy: projectSettings.energy || 'building',
+    auteur: projectSettings.auteur || 'none',
+  } : null;
 
   // ─── Auteur application ───────────────────────────────────────────────────
   const handleApplyAuteur = useCallback(async () => {
@@ -818,20 +891,21 @@ export default function SchemaOutput({
                   >
                     SETUP
                   </button>
-                  {/* Phase 2: Brainstorm button */}
+                  {/* Auteur Dialogue button (Sprint 04) */}
                   <button
-                    onClick={() => handleBrainstorm(i)}
-                    disabled={brainstormingIdx === i}
+                    onClick={() => handleOpenDialogue(i)}
                     style={{
-                      ...S.btnSec, padding: "4px 10px", fontSize: "8px",
-                      color: brainstormStates[i]?.state === "ready" ? "#b89c4a"
-                        : brainstormingIdx === i ? "#b89c4a" : "rgba(232,228,222,0.3)",
-                      borderColor: brainstormStates[i]?.state === "ready" ? "rgba(184,156,74,0.3)" : undefined,
-                      animation: brainstormingIdx === i ? "pulse 1.5s infinite" : "none",
+                      ...S.btnSec, padding: "4px 10px", fontSize: "9px",
+                      color: dialogueStates[i]?.state === "approved" ? "#5a9a6a"
+                        : dialogueStates[i]?.state === "active" ? "#b89c4a"
+                        : "rgba(232,228,222,0.3)",
+                      borderColor: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.3)"
+                        : dialogueStates[i]?.state === "active" ? "rgba(184,156,74,0.3)" : undefined,
+                      background: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.05)" : undefined,
                     }}
-                    title="Auteur Brainstorm — generate arc-aware variations"
+                    title="Auteur Dialogue — collaborative shot direction"
                   >
-                    {brainstormingIdx === i ? "✦…" : "✦"}
+                    {dialogueStates[i]?.state === "approved" ? "LOCKED" : "DIALOGUE"}
                   </button>
                   {/* Phase 3: Pivot badge */}
                   {i === pivotIdx && (
@@ -975,6 +1049,23 @@ export default function SchemaOutput({
                   </div>
                 );
               })()}
+
+              {/* Sprint 04: Auteur Dialogue */}
+              {dialogueStates[i] && (dialogueStates[i].state === 'active' || dialogueStates[i].state === 'approved') && (
+                <AuteurDialogue
+                  shot={s}
+                  shotIndex={i}
+                  arcData={arcData}
+                  concept={concept}
+                  creativeDirection={dialogueCreativeDirection}
+                  approvedShots={approvedDialogues}
+                  dialogue={dialogueStates[i]}
+                  onApprove={handleDialogueApprove}
+                  onUpdateShot={onUpdateShot}
+                  onDialogueUpdate={handleDialogueUpdate}
+                  onGenerateKeyframe={handleGenerateKeyframeInDialogue}
+                />
+              )}
 
               {/* SETUP panel */}
               <ShotSetup

@@ -66,6 +66,7 @@ export function createProject(inputs, name) {
     keyframes: [],  // [{ id, name, type, prompt, imageUrl, aspectRatio }]
     runs: [],
     settings: createDefaultSettings(),
+    dialogues: {},  // { [runId]: ShotDialogue[] } — per-run auteur dialogue state
   };
 }
 
