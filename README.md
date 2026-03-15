@@ -3,6 +3,31 @@
 > The first AI-native production system for Luma Dream Machine.
 > Concept to finished ad in under an hour.
 
+[![CI](https://github.com/Darv0n/luma-production-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Darv0n/luma-production-engine/actions/workflows/ci.yml)
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Darv0n/luma-production-engine/releases/tag/v1.0.0)
+[![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-private-lightgrey)]()
+
+---
+
+## Screenshots
+
+**Dashboard** — 4 projects, each with arc shape, shot count, credit estimate, and handle.
+
+![Dashboard](docs/screenshot-dashboard.png)
+
+**Schema + Keyframe Design** — Handle, arc, Photon keyframes (grass sandal + gremlin character), mode bar.
+
+![Schema and Keyframe Design](docs/screenshot-keyframe.png)
+
+**Auteur System** — Director presets, AI Auteur, Mood/Energy, Hard Stops, Shot Defaults.
+
+![Auteur System](docs/screenshot-auteur.png)
+
+**Auteur Brainstorm** — Arc-aware variation generation. Auteur picks "Desperate Measure" with directorial rationale.
+
+![Auteur Brainstorm](docs/screenshot-brainstorm.png)
+
 ---
 
 ## What Is This?
@@ -50,6 +75,63 @@ POST-CHAIN (automatic per shot)
   → Upscale (720p / 1080p / 4K)
     ↓
 STORAGE → data/projects.json (LowDB, disk-persistent, port-independent)
+```
+
+---
+
+## System Diagram
+
+```mermaid
+flowchart TD
+    C(["💬 Raw Concept"]):::input --> PE
+
+    subgraph PE ["🧠 Production Engine — Claude AI"]
+        direction TB
+        S1["SCAN\naudience · stakes · leverage"] --> S2
+        S2["ARC\nfloor · pivot · terminal"] --> S3
+        S3["SHOTS\nLuma-validated prompts"] --> S4
+        S4["VALIDATE\nauto-fix · scoring"] --> S5
+        S5["SCHEMA\nfull production document"]
+    end
+
+    PE --> KD
+    PE --> AU
+
+    subgraph KD ["🖼 Keyframe Design — Photon"]
+        K1["Define novel objects\n& characters with AI image"]
+        K2["Assign as frame0\nper shot"]
+        K1 --> K2
+    end
+
+    subgraph AU ["🎬 Auteur System"]
+        A1["AI Auteur\narc-mapped camera + HDR"]
+        A2["Director Presets\nKubrick · Malick · Villeneuve\nLynch · Fincher · Wong Kar-wai"]
+        A3["✦ Brainstorm\narc-aware variations\n+ directorial selection"]
+    end
+
+    KD --> GEN
+    AU --> GEN
+
+    subgraph GEN ["⚡ Generation — Luma API"]
+        direction LR
+        G1["Draft\n540p T2V / I2V"] --> G2
+        G2["◆ ARC\nlast_frame chains\nshots together"] --> G3
+        G3["Final\n1080p I2V\ndraft as frame0"]
+        G4["◆ PIVOT\nray-v3-reasoning\nhinge moment"] --> G3
+    end
+
+    GEN --> PC
+
+    subgraph PC ["🔗 Post-Chain — automatic"]
+        P1["Audio\nLuma API\nfrom schema descriptions"]
+        P2["Upscale\n720p · 1080p · 4K"]
+        P1 --> P2
+    end
+
+    PC --> OUT[("💾 data/projects.json\nLowDB — disk persistent")]:::output
+
+    classDef input fill:#1a1a2e,stroke:#6a8ab8,color:#e8e4de
+    classDef output fill:#1a2e1a,stroke:#5a9a6a,color:#e8e4de
 ```
 
 ---
