@@ -199,6 +199,87 @@ Assign camera settings for each shot. Return JSON array:
 }]`;
 }
 
+// ─── Phase 2: Auteur Brainstorm ───────────────────────────────────────────────
+
+const BRAINSTORM_SYSTEM = `You are a creative director evaluating variation themes for a single shot in a narrative arc. Return ONLY valid JSON.`;
+
+/**
+ * Generate arc-aware brainstorm variations using Claude.
+ * Has full arc context — better than Luma's generic Brainstorm.
+ */
+export async function generateAuteurBrainstorm(shot, arcData, concept, callApi) {
+  const bl = beatLabel(arcData?.beats?.[shot.beatIndex ?? 0], arcData);
+  const prompt = `CONCEPT: "${concept}"
+ARC: ${arcData?.shape} — HANDLE: "${arcData?.handle}"
+SHOT "${shot.name}" at ${bl.toUpperCase()} position.
+CURRENT PROMPT: "${shot.prompt}"
+CHANGE REQUIRED: ${shot.change}
+PIVOT: "${arcData?.pivotImage}"
+
+Generate 4 variation directions that serve the ${bl.toUpperCase()} emotional position in this arc.
+
+Return JSON array: [{ "theme": "name", "direction": "one sentence", "prompt": "20-40 word Luma prompt", "rationale": "why this serves ${bl}" }]`;
+
+  const raw = await callApi(BRAINSTORM_SYSTEM, prompt, 0.7);
+  if (Array.isArray(raw)) return raw;
+  try { const m = JSON.stringify(raw).match(/\[[\s\S]*\]/); return JSON.parse(m?.[0] || '[]'); }
+  catch { return []; }
+}
+
+/**
+ * Evaluate brainstorm options and select the best for the arc position.
+ */
+export async function evaluateBrainstormOptions(options, shot, arcData, concept, callApi) {
+  if (!options?.length) return null;
+  const bl = beatLabel(arcData?.beats?.[shot.beatIndex ?? 0], arcData);
+  const prompt = `ARC: ${arcData?.shape} — SHOT "${shot.name}" at ${bl.toUpperCase()}
+CHANGE: ${shot.change} | PIVOT: "${arcData?.pivotImage}"
+
+OPTIONS:
+${options.map((o, i) => `${i + 1}. ${o.theme}: ${o.direction}`).join('\n')}
+
+Select the option that most precisely serves the ${bl} position.
+Return JSON: { "selected": 1, "rationale": "one sentence why" }`;
+
+  const raw = await callApi(BRAINSTORM_SYSTEM, prompt, 0.3);
+  try {
+    const d = typeof raw === 'object' ? raw : JSON.parse(JSON.stringify(raw));
+    const idx = Math.max(0, (d.selected || 1) - 1);
+    return { ...options[idx], auteurRationale: d.rationale };
+  } catch { return options[0]; }
+}
+
+// ─── Phase 3: Pivot detection + prompt ───────────────────────────────────────
+
+/**
+ * Detect which shot is the pivot (closest to arcData.pivotPosition).
+ */
+export function detectPivotShot(shots, arcData) {
+  if (!arcData?.pivotPosition || !shots?.length) return -1;
+  const pivot = arcData.pivotPosition;
+  let closest = -1, minDist = Infinity;
+  shots.forEach((s, i) => {
+    const beat = arcData?.beats?.[s.beatIndex ?? i];
+    if (!beat) return;
+    const dist = Math.abs((beat.position || 0) - pivot);
+    if (dist < minDist) { minDist = dist; closest = i; }
+  });
+  return closest;
+}
+
+/**
+ * Build an enhanced prompt for the reasoning model on the pivot shot.
+ * The reasoning model handles more complexity — this prompt is richer.
+ */
+export function buildPivotPrompt(shot, arcData) {
+  return `${shot.prompt}
+
+PIVOT CONTEXT: This is the hinge moment where ${arcData?.floor} becomes ${arcData?.terminalState}.
+The pivot image: "${arcData?.pivotImage}"
+The change that must happen: ${shot.change}
+The emotional direction reverses here — this frame must carry the full weight of the turn.`;
+}
+
 /**
  * Apply AI Auteur — calls Claude to assign per-shot camera settings.
  * @param {Array} shots

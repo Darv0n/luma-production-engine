@@ -229,6 +229,95 @@ export async function submitUpscale(generationId, resolution = '1080p') {
   return res.json();
 }
 
+// ─── Phase 1: Continuous Arc ──────────────────────────────────────────────────
+
+/**
+ * Get the last frame URL of a completed generation.
+ * Used to chain shots: final[N].lastFrame → frame0 for final[N+1].
+ */
+export async function getLastFrameUrl(generationId) {
+  const res = await fetch(`/api/platform/last-frame/${generationId}`);
+  if (!res.ok) return null;
+  const { url } = await res.json();
+  return url || null;
+}
+
+/**
+ * Submit a final render using a PREVIOUS SHOT'S last frame as the start keyframe.
+ * This creates physical continuity — the world flows from shot to shot.
+ * Falls back to draftId if no lastFrameUrl is available.
+ */
+export async function submitContinuousShot(shot, lastFrameUrl, draftId) {
+  const model = MODEL_MAP[shot.model] || 'ray-flash-2';
+  const duration = DURATION_MAP[shot.duration] || '5s';
+
+  const params = {
+    model,
+    prompt: shot.prompt,
+    aspect_ratio: shot.aspect || '16:9',
+    resolution: '1080p',
+    duration,
+    loop: shot.loop || false,
+    keyframes: {
+      frame0: lastFrameUrl
+        ? { type: 'image', url: lastFrameUrl }
+        : { type: 'generation', id: draftId },
+    },
+  };
+
+  if (shot.dynamicRange === 'hdr') params.dynamic_range = 'hdr';
+  if (shot.cameraControl) params.camera_control = { type: shot.cameraControl };
+
+  const res = await fetch('/api/luma/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+    throw new Error(err?.error?.message || `Continuous shot error ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// ─── Phase 3: Reasoning model for pivot ──────────────────────────────────────
+
+/**
+ * Submit a shot using the platform's ray-v3-reasoning model.
+ * Platform-only — routes through Playwright session.
+ * Use for the PIVOT shot — the hinge moment deserves maximum intelligence.
+ */
+export async function submitReasoningShot(shot, keyframeImageUrl = null) {
+  const res = await fetch('/api/platform/reasoning', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shot, keyframeImageUrl }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Reasoning error ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Phase 2: Platform Brainstorm ────────────────────────────────────────────
+
+/**
+ * Call the Luma platform's Brainstorm on a completed generation.
+ * Returns raw platform suggestions + DOM-extracted themes.
+ */
+export async function callPlatformBrainstorm(generationId, boardId = null) {
+  const res = await fetch('/api/platform/brainstorm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ generationId, boardId }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 // ─── Platform session ─────────────────────────────────────────────────────────
 
 export async function checkPlatformSession() {

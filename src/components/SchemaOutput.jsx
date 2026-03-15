@@ -3,12 +3,13 @@ import { S } from "../styles/theme.js";
 import { validatePrompt } from "../lib/validator.js";
 import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
-import { submitDraft, submitFinalRender, submitAudio, submitUpscale, pollGeneration, needsCharacterRef, checkPlatformSession, openPlatformLogin, submitCharRef } from "../lib/luma-client.js";
+import { submitDraft, submitFinalRender, submitAudio, submitUpscale, pollGeneration, needsCharacterRef, checkPlatformSession, openPlatformLogin, submitCharRef, getLastFrameUrl, submitContinuousShot, submitReasoningShot, callPlatformBrainstorm } from "../lib/luma-client.js";
 import { buildPlatformBrief } from "../lib/platform-brief.js";
 import ShotSetup from "./ShotSetup.jsx";
 import ProjectSettings from "./ProjectSettings.jsx";
 import KeyframeDesign from "./KeyframeDesign.jsx";
-import { applyDirectorPreset, applyAiAuteur } from "../lib/auteur.js";
+import { applyDirectorPreset, applyAiAuteur, generateAuteurBrainstorm, evaluateBrainstormOptions, detectPivotShot, buildPivotPrompt } from "../lib/auteur.js";
+import { callAPI } from "../lib/api.js";
 
 const POLL_INTERVAL = 5000; // ms
 const ROW_INLINE = { display: "flex", alignItems: "center", flexWrap: "wrap" };
@@ -43,6 +44,19 @@ export default function SchemaOutput({
     projectSettings?.hardStops?.beforeGenerate ?? false
   );
   const [applyingAuteur, setApplyingAuteur] = useState(false);
+
+  // ─── Phase 1: Continuous Arc ────────────────────────────────────────────────
+  const [continuousArc, setContinuousArc] = useState(false);
+  // Stores last_frame URLs indexed by shot idx, populated after each final completes
+  const lastFrameUrlsRef = useRef({});
+
+  // ─── Phase 2: Auteur Brainstorm ─────────────────────────────────────────────
+  // { [idx]: { state, variations, selected, auteurPick } }
+  const [brainstormStates, setBrainstormStates] = useState({});
+  const [brainstormingIdx, setBrainstormingIdx] = useState(-1);
+
+  // ─── Phase 3: Pivot detection ───────────────────────────────────────────────
+  const pivotIdx = detectPivotShot(shots, arcData);
 
   // Draft generation state
   const [mode, setMode] = useState("schema"); // "schema" | "draft" | "hybrid"
@@ -157,7 +171,14 @@ export default function SchemaOutput({
           try {
             const gen = await pollGeneration(d.id);
             if (gen.state === "completed") {
-              updateFinal(Number(idx), { state: "completed", videoUrl: gen.assets?.video || null });
+              const videoUrl = gen.assets?.video || null;
+              updateFinal(Number(idx), { state: "completed", videoUrl });
+              // Phase 1: Fetch and store last_frame URL for Continuous Arc chaining
+              if (continuousArc) {
+                getLastFrameUrl(d.id).then((url) => {
+                  if (url) lastFrameUrlsRef.current[Number(idx)] = url;
+                });
+              }
             } else if (gen.state === "failed") {
               updateFinal(Number(idx), { state: "failed", error: gen.failure_reason || "Final render failed" });
             } else {
@@ -181,12 +202,33 @@ export default function SchemaOutput({
     if (!draft?.id) return;
     updateFinal(idx, { state: "queued", id: null, videoUrl: null, error: null });
     try {
-      const gen = await submitFinalRender(shots[idx], draft.id);
+      let gen;
+      // Phase 3: Use reasoning model for pivot shot
+      if (idx === pivotIdx && shots[idx]) {
+        const kfUrl = shots[idx].keyframeId
+          ? projectKeyframes?.find((k) => k.id === shots[idx].keyframeId)?.imageUrl
+          : null;
+        const pivotShot = { ...shots[idx], prompt: buildPivotPrompt(shots[idx], arcData) };
+        try {
+          gen = await submitReasoningShot(pivotShot, kfUrl || null);
+        } catch {
+          // Reasoning model failed — fall through to standard
+          gen = await submitFinalRender(shots[idx], draft.id);
+        }
+      }
+      // Phase 1: Continuous Arc — use previous shot's last frame as frame0
+      else if (continuousArc && idx > 0 && lastFrameUrlsRef.current[idx - 1]) {
+        gen = await submitContinuousShot(shots[idx], lastFrameUrlsRef.current[idx - 1], draft.id);
+      }
+      // Standard final render
+      else {
+        gen = await submitFinalRender(shots[idx], draft.id);
+      }
       updateFinal(idx, { state: gen.state || "queued", id: gen.id });
     } catch (e) {
       updateFinal(idx, { state: "failed", error: e.message });
     }
-  }, [shots, draftStates, updateFinal]);
+  }, [shots, draftStates, updateFinal, continuousArc, pivotIdx, arcData, projectKeyframes]);
 
   const submitAllFinals = useCallback(async () => {
     const approvedIdxs = shots
@@ -293,6 +335,32 @@ export default function SchemaOutput({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalStates]);
+
+  // ─── Phase 2: Auteur Brainstorm handler ──────────────────────────────────
+  const handleBrainstorm = useCallback(async (idx) => {
+    setBrainstormingIdx(idx);
+    setBrainstormStates((prev) => ({ ...prev, [idx]: { state: "generating" } }));
+    try {
+      // Generate arc-aware variations using Claude
+      const variations = await generateAuteurBrainstorm(shots[idx], arcData, concept, callAPI);
+      // Auteur evaluates and picks the best
+      const auteurPick = await evaluateBrainstormOptions(variations, shots[idx], arcData, concept, callAPI);
+      setBrainstormStates((prev) => ({
+        ...prev,
+        [idx]: { state: "ready", variations, auteurPick },
+      }));
+    } catch (e) {
+      setBrainstormStates((prev) => ({ ...prev, [idx]: { state: "failed", error: e.message } }));
+    }
+    setBrainstormingIdx(-1);
+  }, [shots, arcData, concept]);
+
+  const applyBrainstormVariation = useCallback((idx, variation) => {
+    if (onUpdateShot && variation?.prompt) {
+      onUpdateShot(idx, { ...shots[idx], prompt: variation.prompt });
+    }
+    setBrainstormStates((prev) => ({ ...prev, [idx]: { ...prev[idx], applied: variation } }));
+  }, [shots, onUpdateShot]);
 
   // ─── Auteur application ───────────────────────────────────────────────────
   const handleApplyAuteur = useCallback(async () => {
@@ -581,11 +649,7 @@ export default function SchemaOutput({
         <button
           onClick={() => setReviewMode((r) => !r)}
           style={{
-            ...S.btnSec,
-            fontSize: "9px",
-            padding: "5px 12px",
-            letterSpacing: "1.5px",
-            marginLeft: "4px",
+            ...S.btnSec, fontSize: "9px", padding: "5px 12px", letterSpacing: "1.5px", marginLeft: "4px",
             color: reviewMode ? "#b89c4a" : "rgba(232,228,222,0.25)",
             borderColor: reviewMode ? "rgba(184,156,74,0.3)" : "rgba(232,228,222,0.06)",
             background: reviewMode ? "rgba(184,156,74,0.05)" : "transparent",
@@ -593,6 +657,18 @@ export default function SchemaOutput({
           title="Pause before execution to review all settings"
         >
           {reviewMode ? "✓ REVIEW" : "REVIEW"}
+        </button>
+        <button
+          onClick={() => setContinuousArc((c) => !c)}
+          style={{
+            ...S.btnSec, fontSize: "9px", padding: "5px 12px", letterSpacing: "1.5px", marginLeft: "4px",
+            color: continuousArc ? "#6a8ab8" : "rgba(232,228,222,0.25)",
+            borderColor: continuousArc ? "rgba(106,138,184,0.3)" : "rgba(232,228,222,0.06)",
+            background: continuousArc ? "rgba(106,138,184,0.05)" : "transparent",
+          }}
+          title="Chain shots — each shot's last frame feeds the next shot's frame0"
+        >
+          {continuousArc ? "◆ ARC" : "ARC"}
         </button>
         {mode !== "schema" && (
           <span style={{ ...S.mono, fontSize: "9px", ...S.dim, marginLeft: "10px", alignSelf: "center" }}>
@@ -742,6 +818,32 @@ export default function SchemaOutput({
                   >
                     SETUP
                   </button>
+                  {/* Phase 2: Brainstorm button */}
+                  <button
+                    onClick={() => handleBrainstorm(i)}
+                    disabled={brainstormingIdx === i}
+                    style={{
+                      ...S.btnSec, padding: "4px 10px", fontSize: "8px",
+                      color: brainstormStates[i]?.state === "ready" ? "#b89c4a"
+                        : brainstormingIdx === i ? "#b89c4a" : "rgba(232,228,222,0.3)",
+                      borderColor: brainstormStates[i]?.state === "ready" ? "rgba(184,156,74,0.3)" : undefined,
+                      animation: brainstormingIdx === i ? "pulse 1.5s infinite" : "none",
+                    }}
+                    title="Auteur Brainstorm — generate arc-aware variations"
+                  >
+                    {brainstormingIdx === i ? "✦…" : "✦"}
+                  </button>
+                  {/* Phase 3: Pivot badge */}
+                  {i === pivotIdx && (
+                    <span style={{
+                      ...S.mono, fontSize: "7px", letterSpacing: "1px", padding: "2px 6px",
+                      color: "#6a8ab8", borderRadius: "2px",
+                      border: "1px solid rgba(106,138,184,0.3)",
+                      background: "rgba(106,138,184,0.06)",
+                    }} title="Pivot shot — will use reasoning model">
+                      ◆ PIVOT
+                    </span>
+                  )}
                   <button
                     onClick={() => handleCopyPrompt(i)}
                     style={{ ...S.btnSec, padding: "4px 10px", fontSize: "8px" }}
@@ -825,6 +927,54 @@ export default function SchemaOutput({
                   {s.prompt}
                 </div>
               )}
+
+              {/* Phase 2: Brainstorm results */}
+              {brainstormStates[i]?.state === "ready" && (() => {
+                const bs = brainstormStates[i];
+                return (
+                  <div style={{
+                    marginTop: "8px", padding: "10px 14px",
+                    background: "rgba(184,156,74,0.04)",
+                    border: "1px solid rgba(184,156,74,0.15)", borderRadius: "3px",
+                  }}>
+                    <div style={{ ...S.mono, fontSize: "8px", letterSpacing: "2px", color: "#b89c4a", marginBottom: "8px" }}>
+                      ✦ AUTEUR BRAINSTORM
+                    </div>
+                    {bs.auteurPick && (
+                      <div style={{ marginBottom: "8px", padding: "6px 10px", background: "rgba(184,156,74,0.06)", borderRadius: "2px" }}>
+                        <div style={{ ...S.mono, fontSize: "8px", color: "#b89c4a", marginBottom: "2px" }}>
+                          AUTEUR PICKS: {bs.auteurPick.theme}
+                        </div>
+                        <div style={{ ...S.mono, fontSize: "8px", color: "rgba(232,228,222,0.4)", fontStyle: "italic" }}>
+                          "{bs.auteurPick.auteurRationale}"
+                        </div>
+                        <button
+                          onClick={() => applyBrainstormVariation(i, bs.auteurPick)}
+                          style={{ ...S.btnSec, fontSize: "8px", padding: "3px 10px", marginTop: "6px", color: "#b89c4a", borderColor: "rgba(184,156,74,0.3)" }}
+                        >
+                          APPLY AUTEUR PICK
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {(bs.variations || []).map((v, vi) => (
+                        <div key={vi} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                          <button
+                            onClick={() => applyBrainstormVariation(i, v)}
+                            style={{ ...S.btnSec, fontSize: "7px", padding: "2px 8px", flexShrink: 0, color: bs.applied?.theme === v.theme ? "#5a9a6a" : undefined }}
+                          >
+                            {bs.applied?.theme === v.theme ? "✓" : vi + 1}
+                          </button>
+                          <div>
+                            <div style={{ ...S.mono, fontSize: "8px", color: "#e8e4de" }}>{v.theme}</div>
+                            <div style={{ ...S.mono, fontSize: "8px", color: "rgba(232,228,222,0.35)" }}>{v.direction}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* SETUP panel */}
               <ShotSetup

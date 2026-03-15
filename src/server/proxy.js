@@ -284,6 +284,47 @@ export function createPlatformMiddleware() {
       return;
     }
 
+    // GET /api/platform/last-frame/:id → fetch last_frame URL from photon/v2
+    const lfMatch = req.url.match(/^\/last-frame\/([^/?]+)/);
+    if (lfMatch && req.method === 'GET') {
+      (async () => {
+        try {
+          const { getLastFrame } = await import('./luma-platform.js');
+          const url = await getLastFrame(lfMatch[1]);
+          json(200, { url });
+        } catch (e) { json(500, { error: e.message }); }
+      })();
+      return;
+    }
+
+    // POST /api/platform/reasoning → submit with ray-v3-reasoning model
+    if (req.url === '/reasoning' && req.method === 'POST') {
+      readBody((payload) => {
+        (async () => {
+          try {
+            const { submitWithReasoning } = await import('./luma-platform.js');
+            const result = await submitWithReasoning(payload.shot, payload.keyframeImageUrl);
+            json(200, result);
+          } catch (e) { json(500, { error: e.message }); }
+        })();
+      });
+      return;
+    }
+
+    // POST /api/platform/brainstorm → call platform brainstorm on a generation
+    if (req.url === '/brainstorm' && req.method === 'POST') {
+      readBody((payload) => {
+        (async () => {
+          try {
+            const { callPlatformBrainstorm } = await import('./luma-platform.js');
+            const result = await callPlatformBrainstorm(payload.generationId, payload.boardId);
+            json(200, result);
+          } catch (e) { json(500, { error: e.message }); }
+        })();
+      });
+      return;
+    }
+
     // POST /api/platform/login
     if (req.url === '/login' && req.method === 'POST') {
       (async () => {

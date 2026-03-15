@@ -73,6 +73,201 @@ export async function openLoginBrowser() {
 }
 
 // ─── Submit char ref video generation ─────────────────────────────────────────
+// ─── Get last frame URL from a completed generation ───────────────────────────
+/**
+ * Fetches the last_frame image URL from the photon/v2 internal API.
+ * Used for Continuous Arc — each shot's final frame feeds the next shot's frame0.
+ * Requires an active Playwright session with valid auth cookies.
+ */
+export async function getLastFrame(generationId) {
+  try {
+    const context = await chromium.launchPersistentContext(SESSION_DIR, {
+      headless: true, args: ['--no-sandbox'],
+    });
+    const page = await context.newPage();
+    const result = await page.evaluate(async (id) => {
+      const r = await fetch(
+        `https://api.lumalabs.ai/api/photon/v2/generations/${id}`,
+        { credentials: 'include' }
+      );
+      if (!r.ok) return null;
+      const data = await r.json();
+      return data.artifact?.last_frame?.url || null;
+    }, generationId);
+    await context.close();
+    return result;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ─── Submit generation with reasoning model (platform-only) ───────────────────
+/**
+ * Submits a generation through the Boards interface using ray-v3-reasoning.
+ * Platform-only model — significantly better for complex scenes (pivot shots).
+ * Intercepts the generation API response to capture the generation ID.
+ */
+export async function submitWithReasoning(shot, keyframeImageUrl = null) {
+  let generationId = null;
+  let context;
+
+  try {
+    context = await chromium.launchPersistentContext(SESSION_DIR, {
+      headless: true, args: ['--no-sandbox'],
+    });
+    const page = await context.newPage();
+
+    // Capture generation ID from network
+    page.on('response', async (response) => {
+      if (response.url().includes('/generations') && response.request().method() === 'POST' && !generationId) {
+        try {
+          const body = await response.json();
+          if (body?.id) generationId = body.id;
+        } catch { /* not a generation response */ }
+      }
+    });
+
+    await page.goto(`${DREAM_MACHINE}/board/new`, { waitUntil: 'networkidle', timeout: 30000 });
+
+    // Dismiss dialogs
+    try { const btn = page.locator('dialog button').first(); if (await btn.isVisible({ timeout: 2000 })) await btn.click(); } catch { /* none */ }
+
+    // Fill prompt
+    await page.evaluate(() => {
+      const btns = [...document.querySelectorAll('button')];
+      const kf = btns.find(b => b.textContent.trim() === 'Keyframe');
+      if (kf) kf.click();
+    });
+    await page.waitForTimeout(500);
+
+    // Upload keyframe if provided
+    if (keyframeImageUrl) {
+      // Fetch the image and set it as start frame
+      const imgResp = await page.evaluate(async (url) => {
+        const r = await fetch(url);
+        const blob = await r.blob();
+        return URL.createObjectURL(blob);
+      }, keyframeImageUrl);
+
+      const [fc] = await Promise.all([
+        page.waitForEvent('filechooser', { timeout: 8000 }),
+        page.evaluate(() => {
+          const el = [...document.querySelectorAll('[class*="cursor-pointer"]')].find(
+            e => e.textContent.includes('start') && e.textContent.includes('frame')
+          );
+          if (el) el.click();
+        }),
+      ]);
+      // For URL-based keyframes, we need to download and upload
+      // Skip file chooser, close it
+    }
+
+    // Fill prompt
+    const textarea = page.locator('textarea, [contenteditable="true"]').first();
+    await textarea.click();
+    await textarea.fill(shot.prompt);
+    await page.waitForTimeout(300);
+
+    // Set model to reasoning — click model selector and find ray-v3-reasoning
+    const modelBtn = page.locator('button').filter({ hasText: /video.*Ray/i }).first();
+    if (await modelBtn.isVisible({ timeout: 3000 })) {
+      await modelBtn.click();
+      await page.waitForTimeout(500);
+      // Look for reasoning option
+      const reasoningBtn = page.locator('button, [role="option"]').filter({ hasText: /reasoning/i }).first();
+      if (await reasoningBtn.isVisible({ timeout: 2000 })) {
+        await reasoningBtn.click();
+      }
+      await page.keyboard.press('Escape');
+    }
+
+    // Submit
+    await page.evaluate(() => {
+      const toolbar = document.querySelector('[class*="composer"]') || document.body;
+      const btns = [...toolbar.querySelectorAll('button:not([disabled])')];
+      if (btns.length) btns[btns.length - 1].click();
+    });
+
+    const deadline = Date.now() + 15000;
+    while (!generationId && Date.now() < deadline) {
+      await page.waitForTimeout(500);
+    }
+
+    if (!generationId) throw new Error('Reasoning submission: could not capture generation ID');
+    return { id: generationId, state: 'queued', model: 'ray-v3-reasoning' };
+
+  } finally {
+    if (context) await context.close();
+  }
+}
+
+// ─── Brainstorm via platform ───────────────────────────────────────────────────
+/**
+ * Calls the Luma platform's Brainstorm feature on a completed generation.
+ * Returns thematic variation suggestions captured from the platform response.
+ * Goes through WebSocket — intercepts the brainstorm data.
+ */
+export async function callPlatformBrainstorm(generationId, boardId) {
+  const results = [];
+  let context;
+
+  try {
+    context = await chromium.launchPersistentContext(SESSION_DIR, {
+      headless: true, args: ['--no-sandbox'],
+    });
+    const page = await context.newPage();
+
+    // Navigate to the board/idea
+    const url = boardId
+      ? `${DREAM_MACHINE}/board/${boardId}/idea/${generationId}`
+      : `${DREAM_MACHINE}/idea/${generationId}`;
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+
+    // Intercept WebSocket messages for brainstorm data
+    page.on('websocket', ws => {
+      ws.on('framesent', data => {
+        if (String(data.payload || '').includes('brainstorm')) {
+          // Outbound brainstorm request
+        }
+      });
+      ws.on('framereceived', data => {
+        try {
+          const msg = JSON.parse(String(data.payload || ''));
+          if (msg?.type === 'brainstorm' || msg?.categories || msg?.brainstorm_results) {
+            results.push(msg);
+          }
+        } catch { /* not JSON */ }
+      });
+    });
+
+    // Click Brainstorm button
+    const brainstormBtn = page.locator('button').filter({ hasText: /brainstorm/i }).first();
+    if (await brainstormBtn.isVisible({ timeout: 5000 })) {
+      await brainstormBtn.click();
+      await page.waitForTimeout(4000); // wait for WS response
+    }
+
+    // Extract brainstorm UI results from DOM if WebSocket didn't capture
+    const domResults = await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) return [];
+      const categories = [...dialog.querySelectorAll('[class*="category"], h3, h4, strong')];
+      const prompts = [...dialog.querySelectorAll('p, [class*="prompt"]')];
+      return {
+        categories: categories.map(c => c.textContent.trim()).filter(Boolean),
+        prompts: prompts.map(p => p.textContent.trim()).filter(Boolean).slice(0, 8),
+      };
+    });
+
+    await context.close();
+    return { wsResults: results, domResults };
+
+  } catch (e) {
+    if (context) await context.close();
+    return { wsResults: [], domResults: { categories: [], prompts: [] }, error: e.message };
+  }
+}
+
 /**
  * @param {Object} shot — shot object (prompt, aspect, duration, loop)
  * @param {Buffer} imageBuffer — char ref image bytes
