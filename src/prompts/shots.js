@@ -44,8 +44,12 @@ ABSOLUTE RULES — violating any of these produces unusable output:
 
 Return ONLY valid JSON array.`;
 
-export function buildShotsUser(concept, format, product, analysis, arcData) {
+export function buildShotsUser(concept, format, product, analysis, arcData, characters = []) {
   const defaultModel = analysis.needsCharacterRef ? "Ray3" : "Ray3.14";
+
+  const characterHint = characters.length > 0
+    ? `\nREGISTERED CHARACTERS (use these names in characterRef fields, set model to Ray3 for these shots):\n${characters.map(c => `  @${c.name}${c.description ? ` — ${c.description}` : ""}`).join("\n")}\n`
+    : "";
 
   return `CONCEPT: "${concept}"
 FORMAT: ${format || "30s"}
@@ -59,7 +63,7 @@ ${(arcData.beats || []).map((b, i) => `  ${i + 1}. [${((b.position || 0) * 100).
 PIVOT POSITION: ${arcData.pivotPosition}
 PIVOT IMAGE: "${arcData.pivotImage}"
 CONTRAST AT PIVOT: "${arcData.contrast}"
-
+${characterHint}
 Generate exactly ${arcData.beats?.length || 6} shots mapping 1:1 to the arc beats above.
 
 For each shot, determine:

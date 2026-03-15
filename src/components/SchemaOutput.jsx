@@ -4,14 +4,23 @@ import { validatePrompt } from "../lib/validator.js";
 import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
 
-export default function SchemaOutput({ result, onUpdateShot }) {
+export default function SchemaOutput({
+  result,
+  onUpdateShot,
+  onRerunShot,
+  rerunningShot = -1,
+  concept = "",
+  format = "",
+  product = "",
+  targetDuration = "",
+}) {
   const [copied, setCopied] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(-1);
   const [editingIdx, setEditingIdx] = useState(-1);
   const [editPrompt, setEditPrompt] = useState("");
 
   const { analysis, arcData, shots, validations } = result;
-  const schema = buildFullSchema("", "", "", "", analysis, arcData, shots, validations);
+  const schema = buildFullSchema(concept, format, product, targetDuration, analysis, arcData, shots, validations);
 
   const handleCopyAll = () => {
     navigator.clipboard.writeText(schema);
@@ -109,6 +118,23 @@ export default function SchemaOutput({ result, onUpdateShot }) {
                   >
                     {copiedIdx === i ? "✓" : "COPY"}
                   </button>
+                  {onRerunShot && (
+                    <button
+                      onClick={() => rerunningShot === -1 && onRerunShot(i)}
+                      disabled={rerunningShot >= 0}
+                      style={{
+                        ...S.btnSec,
+                        padding: "4px 10px",
+                        fontSize: "8px",
+                        color: rerunningShot === i ? "#b89c4a" : undefined,
+                        borderColor: rerunningShot === i ? "rgba(184,156,74,0.3)" : undefined,
+                        animation: rerunningShot === i ? "pulse 1.5s infinite" : "none",
+                      }}
+                      title="Regenerate this shot (arc context frozen)"
+                    >
+                      {rerunningShot === i ? "…" : "↻"}
+                    </button>
+                  )}
                 </div>
               </div>
 

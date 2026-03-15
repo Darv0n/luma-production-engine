@@ -37,6 +37,7 @@ export function createProject(inputs, name) {
       product: inputs.product || "",
       targetDuration: inputs.targetDuration || "30 seconds",
     },
+    characters: [], // Phase 2D: [{ name: string, description: string }]
     runs: [],
   };
 }
