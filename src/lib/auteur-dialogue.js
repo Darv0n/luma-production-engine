@@ -93,6 +93,17 @@ Let it shape every choice you make. The embodiment matters more than any label.`
   return prompt;
 }
 
+// ─── Project context ────────────────────────────────────────────────────────
+
+function buildProjectContext(ctx) {
+  if (!ctx) return '';
+  const lines = [];
+  if (ctx.format) lines.push(`FORMAT: ${ctx.format}`);
+  if (ctx.product) lines.push(`PRODUCT: ${ctx.product} — this is what the piece is advertising. The product must integrate naturally at the pivot point, not as interruption but as the hinge the story turns on.`);
+  if (ctx.targetDuration) lines.push(`TARGET DURATION: ${ctx.targetDuration}`);
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
 // ─── Context builders ───────────────────────────────────────────────────────
 
 export function buildDialogueContext(approvedShots, currentIndex, arcData) {
@@ -136,12 +147,13 @@ function buildShotContext(shot, arcData) {
 /**
  * Generate the initial auteur proposal for a shot.
  */
-export async function generateInitialProposal(shot, arcData, concept, creativeDirection, approvedShots, callApi) {
+export async function generateInitialProposal(shot, arcData, concept, creativeDirection, approvedShots, callApi, projectContext) {
   const ctx = buildShotContext(shot, arcData);
   const dialogueCtx = buildDialogueContext(approvedShots, shot.beatIndex ?? 0, arcData);
+  const projectCtx = buildProjectContext(projectContext);
 
   const userPrompt = `CONCEPT: "${concept}"
-ARC SHAPE: ${arcData?.shape || '?'}
+${projectCtx}ARC SHAPE: ${arcData?.shape || '?'}
 HANDLE: "${arcData?.handle || ''}"
 PIVOT IMAGE: "${arcData?.pivotImage || ''}"
 MOOD: ${creativeDirection?.mood || 'neutral'}
@@ -173,7 +185,7 @@ Propose your direction for this shot. Return JSON:
 /**
  * Respond to human feedback with a refined proposal.
  */
-export async function respondToFeedback(dialogue, feedback, arcData, concept, creativeDirection, approvedShots, callApi) {
+export async function respondToFeedback(dialogue, feedback, arcData, concept, creativeDirection, approvedShots, callApi, projectContext) {
   const shot = { name: '', beatIndex: dialogue.shotIndex, prompt: '' };
   // Reconstruct from dialogue turns
   const lastProposal = [...dialogue.turns].reverse().find((t) => t.role === 'auteur' && t.prompt);
@@ -192,8 +204,10 @@ export async function respondToFeedback(dialogue, feedback, arcData, concept, cr
     return `DIRECTOR: ${t.message}`;
   }).join('\n\n');
 
+  const projectCtx = buildProjectContext(projectContext);
+
   const userPrompt = `CONCEPT: "${concept}"
-ARC: ${arcData?.shape || '?'} — POSITION: ${ctx.position}% (${ctx.label.toUpperCase()})
+${projectCtx}ARC: ${arcData?.shape || '?'} — POSITION: ${ctx.position}% (${ctx.label.toUpperCase()})
 ${dialogueCtx}
 CONVERSATION SO FAR:
 ${conversationHistory}
@@ -219,14 +233,15 @@ Refine your proposal based on this feedback. Return JSON:
 /**
  * Generate 3 alternative directions for a shot.
  */
-export async function requestAlternatives(dialogue, arcData, concept, creativeDirection, approvedShots, callApi) {
+export async function requestAlternatives(dialogue, arcData, concept, creativeDirection, approvedShots, callApi, projectContext) {
   const ctx = buildShotContext({ beatIndex: dialogue.shotIndex }, arcData);
   const dialogueCtx = buildDialogueContext(approvedShots, dialogue.shotIndex, arcData);
 
   const lastProposal = [...dialogue.turns].reverse().find((t) => t.role === 'auteur' && t.prompt);
+  const projectCtx = buildProjectContext(projectContext);
 
   const userPrompt = `CONCEPT: "${concept}"
-ARC: ${arcData?.shape || '?'} — POSITION: ${ctx.position}% (${ctx.label.toUpperCase()})
+${projectCtx}ARC: ${arcData?.shape || '?'} — POSITION: ${ctx.position}% (${ctx.label.toUpperCase()})
 CHANGE: ${ctx.change}
 ${dialogueCtx}
 CURRENT PROPOSAL: "${lastProposal?.prompt || 'none'}"

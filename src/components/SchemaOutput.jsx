@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { S } from "../styles/theme.js";
 import { validatePrompt } from "../lib/validator.js";
 import { estimateCredits } from "../lib/credits.js";
@@ -40,6 +41,7 @@ export default function SchemaOutput({
 }) {
   // Destructure result up front so hooks below can reference shots safely
   const { analysis, arcData, shots, validations } = result;
+  const navigate = useNavigate();
 
   const [copied, setCopied] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(-1);
@@ -717,8 +719,25 @@ export default function SchemaOutput({
             animation: fullAutoActive ? "pulse 1.5s infinite" : "none",
           }}
         >
-          {fullAutoActive ? "AUTO RUNNING…" : "⚡ FULL AUTO"}
+          {fullAutoActive ? "AUTO RUNNING…" : "FULL AUTO"}
         </button>
+        {projectId && (
+          <button
+            onClick={() => navigate(`/projects/${projectId}/produce`)}
+            style={{
+              ...S.btnSec,
+              fontSize: "9px",
+              padding: "5px 12px",
+              letterSpacing: "1.5px",
+              marginLeft: "4px",
+              color: "#8a6ab8",
+              borderColor: "rgba(138,106,184,0.4)",
+              background: "rgba(138,106,184,0.08)",
+            }}
+          >
+            PRODUCE
+          </button>
+        )}
         <button
           onClick={() => setReviewMode((r) => !r)}
           style={{
@@ -1075,6 +1094,7 @@ export default function SchemaOutput({
                   onUpdateShot={onUpdateShot}
                   onDialogueUpdate={handleDialogueUpdate}
                   onGenerateKeyframe={handleGenerateKeyframeInDialogue}
+                  projectContext={{ format, product, targetDuration }}
                 />
               )}
 

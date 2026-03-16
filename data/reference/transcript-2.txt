@@ -1,0 +1,294 @@
+[00:00] Hey guys, David Chowodona here.
+[00:01] I want to guide you through this beta access period,
+[00:05] a little bit of an overview and an introduction to realms,
+[00:09] our newest way of creating inside of the Dream Machine
+[00:12] ecosystem.
+[00:13] And I want to start off by saying, first of all,
+[00:16] thank you for being here and for taking the time to do this.
+[00:19] I want to point out that we are still in this beta period.
+[00:21] So your feedback, your use cases,
+[00:24] your experience here is super valuable to us.
+[00:27] So please take a minute while you're using it
+[00:31] as you're getting through your journey here
+[00:33] to just jot down your progress,
+[00:34] jot down your questions, your issues, et cetera.
+[00:37] All of the things that you find here that would be really
+[00:39] useful for us to make improvements to the tool
+[00:43] and to kind of get it ready for the broader launch.
+[00:47] With that said, as an introduction here to what realms
+[00:51] really is, it's a multiplayer canvas.
+[00:55] It's a shareable canvas that is powered by intelligent,
+[00:59] multimodal assistants that are there to collaborate with you,
+[01:03] that are there to support you, teach you,
+[01:05] and execute for you to create pretty much anything.
+[01:10] I want to split this up into three different buckets here.
+[01:13] The multimodal aspect of this, you are here to create images,
+[01:18] to create sound effects, to create text,
+[01:20] and to create videos all in a single workspace,
+[01:23] all mediums coming in under one roof here.
+[01:27] The multimodal aspect of this,
+[01:29] you are here able to use all of the latest pro-level models,
+[01:33] like Ray III, Veo, Nano Banana, 11 Labs, Sora,
+[01:37] and a bunch of other models as well.
+[01:40] Then the multiplayer aspect, the shareable aspect of this,
+[01:45] each one of your canvases here will be shareable
+[01:48] with anybody on your team.
+[01:49] In fact, anybody with a link that you share it with
+[01:52] will be able to jump into your board
+[01:54] and be able to play around inside of that realm
+[01:58] and not only execute creating other assets,
+[02:02] but also be able to make notes and scribble
+[02:06] and do the things that you're used to doing
+[02:08] in different canvas tools like this,
+[02:12] and underlying all of this,
+[02:14] or let's say tying everything together,
+[02:16] connecting all the dots here,
+[02:17] are these creative agents under the hood.
+[02:20] They're assistants that you can count on
+[02:22] like a creative team just for you that help you create
+[02:26] and help you learn how to use these tools
+[02:29] and pretty much attack any problem that you have as you go.
+[02:34] You're creating all media in one place.
+[02:37] This is bringing text, it's bringing image,
+[02:40] it's bringing audio and bringing video capabilities
+[02:43] into this one shareable canvas,
+[02:46] and all of these creative assistants inside of realms
+[02:50] are here to not only execute for you,
+[02:53] but also help you pretty much answer any question
+[02:56] you may have about them, about the tool,
+[02:59] about the different models and other AI tools
+[03:02] that they have available.
+[03:03] They are very capable in not only making stuff for you,
+[03:08] but helping you understand what to make,
+[03:11] how to make it,
+[03:12] and the best practices of every single tool.
+[03:16] I also wanna touch on some of the ways
+[03:20] that you can talk to these agents,
+[03:22] and I wanna get you into this realm state of mind,
+[03:25] sort of speak.
+[03:26] If you've used chat GBT, you've used Gemini,
+[03:29] you've used Claude, any one of these systems,
+[03:31] all of that and more is under the hood here.
+[03:34] So the same things you're able to ask
+[03:36] and go back and forth with with a tool like chat GBT,
+[03:40] you can do the same thing here,
+[03:42] except the kicker is you have access
+[03:44] to all of these different creative models
+[03:46] that are controlled and puppeteered by these agents
+[03:50] that know every single thing about them.
+[03:52] To start, you're gonna be greeted by an agent
+[03:54] that asks you, hey, what do you want to do?
+[03:57] And here is where you are able to have this back
+[04:01] and forth conversation, this collaborative conversation
+[04:04] with an agent to create anything you want,
+[04:06] and also to give you any bit of information
+[04:09] you want about any assets that you're giving it,
+[04:12] or about any assets that you wanna create,
+[04:14] but also about theory and about helpful guidance
+[04:19] about the tool itself.
+[04:20] So if you feel like calling me to ask me,
+[04:24] I urge you first try asking that agent
+[04:27] because it knows a lot more than even I do about these tools
+[04:31] and it knows a lot more than anyone of us out there know
+[04:34] about Vayo 3.1, about Sora 2,
+[04:37] about any of the models available in realms,
+[04:41] the agents are more than capable of not only using the tools
+[04:47] but helping you understand how they work,
+[04:50] when to use them, and all of the above.
+[04:53] So I wanna just go through some of these questions
+[04:56] just to kinda get us on the same page here.
+[04:59] For example, hey, what video or image models
+[05:03] do you have access to?
+[05:04] Which models are best for character and object consistency?
+[05:08] Help me write a prompt for Vayo 3.1 showing
+[05:12] the progression of camera technology
+[05:14] from invention to modern times just as an example.
+[05:17] Or I want to turn my storyboard sketches into cinematic keyframes.
+[05:20] What's the best way for me to do that?
+[05:22] And what are the best tools for me to do that?
+[05:24] Please take a look at this image
+[05:25] and extract a color palette from it
+[05:28] and give me all the hex color values.
+[05:30] Hey, you know what?
+[05:30] I didn't like that outcome that you just gave me.
+[05:33] Please try that again.
+[05:34] This time try it with nano banana pro.
+[05:36] In fact, try this with every single image model you have
+[05:39] and give me four versions of each one
+[05:41] so that I can go and compare them.
+[05:43] Hey, what visual styles would work best
+[05:45] for a luxury product ad?
+[05:47] And you know what?
+[05:48] Show me three examples of each one of those styles.
+[05:51] And you know what?
+[05:52] Try it with every single image model that you have
+[05:55] so that I can compare all of them.
+[05:57] How do I make a 30 second video
+[05:58] with a consistent character in different environments?
+[06:01] Watch this video and give me three prompt options
+[06:03] to recreate it with ray three in the style of anime,
+[06:07] for example, help me understand every single thing
+[06:10] that you can do with images.
+[06:11] Hey, help me write a script for a five minute film
+[06:14] about a boy with the power to communicate with ants.
+[06:17] Or hey, here's a PDF of a creative brief
+[06:19] that my creative director just gave me.
+[06:23] And on page 29, there's this instruction about this.
+[06:27] Please help me figure out what the best models I could use
+[06:31] in the best process I could use in order to get this done.
+[06:34] All of these questions you can ask the agents here
+[06:39] and they're ready to help you.
+[06:41] They're not only able to execute,
+[06:43] but again, help you understand how to do it.
+[06:46] And also guide you through that process.
+[06:50] I also want to help you understand that this tool
+[06:54] can be used a couple of different ways.
+[06:55] You can be the director of this
+[06:58] who doesn't need to know how the sausage is made,
+[07:01] but you just know a good sausage when you see it.
+[07:05] And once you see something you don't like,
+[07:08] you can go back in and give it very high level instructions
+[07:12] and high level directions and say,
+[07:14] look, I don't like this because of this, that and the other.
+[07:17] Go back and try this again.
+[07:19] And then I'm going to go ahead and tell you
+[07:20] what I like and what I don't like and will go from there.
+[07:24] That's kind of this director view.
+[07:26] Or you can also be the person,
+[07:28] the production artist who makes the sausage
+[07:31] and who needs to control every single aspect
+[07:34] of how that sausage is put together.
+[07:36] Every element is under control as well.
+[07:39] So this is a very basic way of illustrating this,
+[07:42] starting with on the left here,
+[07:44] create an image of coffee being poured into a coffee mug.
+[07:47] Great, here's an image.
+[07:48] Create a video of coffee being poured into a coffee mug.
+[07:51] Awesome, here's a video of that.
+[07:53] Create sound effects of a coffee being poured into a coffee mug.
+[07:56] Cool, here's an audio track.
+[07:57] Or I can go in there and say, hey, here's my theme.
+[08:00] Coffee being poured into a coffee mug.
+[08:02] Now I want you to generate all these following
+[08:04] as had simultaneously image, video and sound effects.
+[08:07] Different ways of creating here.
+[08:09] One at this director view and another
+[08:12] at this very granular production view as well.
+[08:17] Now I want to further break this down into three of my,
+[08:21] the kind of silos that I see this in being split in.
+[08:26] One is flexibility.
+[08:28] Again, this flexible workspace that's loaded
+[08:30] with all these different AI models and tools within it
+[08:35] that let you create without any kind of biased barriers.
+[08:39] This is just you and the outputs and the agent
+[08:42] to go back and forth on.
+[08:43] When you get something that you don't like,
+[08:45] don't just end there because all of the different tools
+[08:49] are in here for you to create something awesome.
+[08:51] A lot of times it just has to do with maybe the level
+[08:54] of detail that you gave it or didn't give it.
+[08:56] The rule, good in, good out.
+[08:59] Treat this as an assistant.
+[09:03] Treat it as almost a real person, a real creative team
+[09:08] that is under you and it's ready to create at your direction.
+[09:13] If you had that in human form, if you had a team
+[09:16] or if you had a real assistant or a real designer,
+[09:18] for example, that you're giving instructions to,
+[09:22] you want to give them the most context possible.
+[09:25] You want to give them the most detailed possible.
+[09:28] That way, you're setting them up for success.
+[09:30] Otherwise, they're going to come back to you
+[09:32] with something that you may not like
+[09:33] or something that's not fully there according
+[09:36] to your direction because maybe your direction was lacking
+[09:39] or maybe you haven't had the chance to go back and forth
+[09:42] and see what they came back with,
+[09:44] which then gives you more ideas.
+[09:46] So be ready for that interaction.
+[09:48] That back and forth is really important here.
+[09:52] Smart control, the ability for you to again,
+[09:55] maintain full creative authority over your creations
+[09:58] and then just let the agents worry
+[10:00] about all that technical execution
+[10:02] or you can also go in there and control every single aspect
+[10:06] of that technical execution as well.
+[10:08] You have those options.
+[10:09] And then something I haven't really talked about is scale
+[10:13] and the ability of exporting at scale,
+[10:16] batching, formatting and delivering multiple assets
+[10:19] at a time with the agents connecting the dots for you
+[10:22] without you having to go in there
+[10:25] and trying to do everything yourself
+[10:27] for a massive set of materials to be outputted.
+[10:32] Again, the agent has the power here to create for you
+[10:36] at all kinds of different levels
+[10:38] and in all kinds of different ways.
+[10:40] Going a little bit deeper into each one of those.
+[10:43] The flexibility aspects here on the left
+[10:45] turn each image into video using ray three,
+[10:48] so a two and video three point one.
+[10:50] So I can compare all of those results, right?
+[10:53] All in one shot, all the models,
+[10:55] not having to connect any nodes or anything like this,
+[10:58] just having the agent do all of that work.
+[11:00] And me as the judge and the jury at the end of the day
+[11:04] to discern what I like and what I don't like
+[11:07] and how much back and forth we're gonna have to do.
+[11:10] Picking that direction that I really like
+[11:12] and going from there to create a whole other branch of assets
+[11:17] after finalizing my choices.
+[11:20] It's the smart control aspect of this
+[11:22] and saying, hey, edit the image to have snow on the backpack,
+[11:25] show four variations with different amounts of snow.
+[11:28] There really are no other tools out there
+[11:30] that I can do this in such a precise way, such a controlled way,
+[11:35] at scale in a single shot.
+[11:39] If you really think about it, you go in
+[11:40] and you start trying to think how you can do this
+[11:43] with any other tool in a single shot like this
+[11:45] at this kind of scale and at this kind of precision
+[11:48] and consistency, it's really, really tough to do that.
+[11:51] So I urge you to also try this.
+[11:53] And then the scale aspect of it, in this case,
+[11:55] I'm also giving at these two seed assets
+[11:58] of the images of the two ice cream sundaes
+[12:00] and saying, analyze these ice cream sundaes
+[12:02] and create 16 inspired fashion items on a white background.
+[12:06] Going from two to many, one to many,
+[12:09] in such a way that you're truly able to go back
+[12:13] and forth with an agent to iterate,
+[12:16] to understand what you like, what you don't like,
+[12:18] and then doing it at a pretty large scale as well.
+[12:23] And then that final aspect of this,
+[12:25] the limitless collaboration, the ability to make all of these things
+[12:30] on a shareable canvas, to create, to review,
+[12:32] to refine with your team in real time,
+[12:35] in that single place, you're able to leave communal notes,
+[12:38] label assets, doodle, et cetera,
+[12:42] and just building and sync together on a single canvas.
+[12:46] One other thing I want to touch on
+[12:47] is some of the features that are coming soon,
+[12:49] some of the things that we're currently updating,
+[12:51] starting with lip sync.
+[12:52] Of course, this is something super important,
+[12:55] and we are working on it to get it perfectly
+[12:57] right in your hands.
+[12:58] Chat sharing, the ability to see the chat history
+[13:00] of different shared boards, a timeline editor,
+[13:04] which is a nice familiar way of visualizing
+[13:07] all your different assets on a timeline,
+[13:10] able to cut and edit things together.
+[13:12] Asset organization, a lot of improvements
+[13:14] will be coming to the way we organize and label
+[13:17] and sort of distribute assets within that canvas itself.
+[13:20] More agent improvements on the way,
+[13:22] personalization, customization aspects of this,
+[13:25] and some more UI control upgrades,
+[13:28] which will give us more options and more control
+[13:31] when using the models manually through the UI
+[13:33] instead of the agent, which you will see inside
+[13:36] of the tool as well.
+[13:38] Thank you guys so much.
+[13:39] Really appreciate you being here,
+[13:40] and I'm looking forward to see how you guys use it.
+[13:43] Cheers.

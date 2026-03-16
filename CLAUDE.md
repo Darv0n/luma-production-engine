@@ -24,11 +24,32 @@ src/                       ← DECOMPOSED LOGIC LAYER (extracted from monolith)
     validator.js         — Client-side Luma prompt validator
     credits.js           — Credit cost estimator
     schema-builder.js    — Plain-text schema document generator
+    luma-client.js       — All Luma API + platform client calls
+    auteur.js            — Director presets + AI auteur + pivot detection
   prompts/
     scan.js              — System + user prompt templates for SCAN stage
     arc.js               — System + user prompt templates for ARC stage
     shots.js             — System + user prompt templates for SHOT GENERATION stage
     fix.js               — System + user prompt templates for AUTO-FIX pass
+  server/
+    proxy.js             — All middleware (API, Luma, Platform, Dream, Auteur, Storage)
+    luma-platform.js     — Playwright platform automation (24+ operations)
+    platform-session.js  — Reusable browser context manager (Sprint 04)
+    auteur-session.js    — Production state machine: THINK→DESIGN→GENERATE→CHAIN→POLISH→DELIVER
+    dream-session.js     — Legacy API-driven session (Sprint 02-03)
+    dream-evaluator.js   — Claude Vision quality evaluation
+    ffmpeg-assembly.js   — Video assembly pipeline
+    db.js                — LowDB initialization
+  components/
+    ProductionTimeline   — Shot timeline with state badges (Sprint 04)
+    ActiveOperationPanel — Phase-aware check-in panel (Sprint 04)
+    CreditBudget         — Live credit tracker (Sprint 04)
+    SchemaOutput         — Shot management + generation + PRODUCE button
+    [... other components from Sprint 01-03]
+  pages/
+    ProductionView.jsx   — Main Sprint 04 production page (/projects/:id/produce)
+    Dashboard.jsx        — Project list
+    ProjectWorkspace.jsx — Pipeline + editing workspace
   styles/
     theme.js             — Design tokens, component style objects
 
@@ -42,6 +63,21 @@ docs/
   FAILURE-MODES.md       — Known failure patterns and mitigations
   DEPLOYMENT.md          — How to deploy as standalone React app
 ```
+
+### Sprint 04: Platform-First Production
+
+The engine pivoted from API-first to platform-first. The Dream Machine platform
+exposes 10x the capabilities of the public API: Keyframe mode with start+end frames,
+Extend Video for seamless chaining, Reframe with AI outpainting, Upscale+HDR,
+Audio, Inpainting, Visual Annotation, Lipsync, and a full conversational AI agent.
+
+**Two production modes:**
+- **MANUAL**: Pipeline creates shot plan + keyframe prompts. Human operates platform.
+- **AUTEUR**: Playwright drives Dream Machine end-to-end via PlatformSession.
+
+**Production flow:** THINK → DESIGN → GENERATE → CHAIN → POLISH → DELIVER
+
+Route: `/projects/:id/produce`
 
 ### Monolith vs. Modular
 

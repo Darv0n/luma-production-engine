@@ -407,6 +407,7 @@ export default function ProjectWorkspace() {
               settings={projectSettings}
               onUpdateSettings={handleUpdateSettings}
               onAcceptConcept={(text) => setConcept(text)}
+              projectContext={{ format, product, targetDuration }}
             />
           )}
 

@@ -14,6 +14,8 @@ import ProjectSidebar from "./src/components/ProjectSidebar.jsx";
 import Dashboard from "./src/pages/Dashboard.jsx";
 import ProjectWorkspace from "./src/pages/ProjectWorkspace.jsx";
 import RunView from "./src/pages/RunView.jsx";
+import ProductionView from "./src/pages/ProductionView.jsx";
+import WarRoom from "./src/pages/WarRoom.jsx";
 
 // ─── Layout (sidebar + outlet) ────────────────────────────────────────────────
 function Layout() {
@@ -170,6 +172,8 @@ export default function App() {
           <Route path="projects/:id" element={<ProjectWorkspace />} />
           <Route path="projects/:id/runs" element={<RunView />} />
           <Route path="projects/:id/runs/:runId" element={<RunView />} />
+          <Route path="projects/:id/produce" element={<ProductionView />} />
+          <Route path="projects/:id/war-room" element={<WarRoom />} />
         </Route>
       </Routes>
     </BrowserRouter>

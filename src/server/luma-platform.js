@@ -767,3 +767,249 @@ export async function reviewBoard(boardId) {
     if (context) await context.close();
   }
 }
+
+// ─── Sprint 04: Session-based platform operations ────────────────────────────
+// These accept a PlatformSession instance instead of launching their own browser.
+// Used by the Auteur state machine for chained production workflows.
+
+/**
+ * Submit a Keyframe mode generation (start frame + optional end frame + prompt).
+ * The highest-leverage platform tool — keyframe images carry 70% of the shot.
+ *
+ * @param {PlatformSession} session - Active platform session
+ * @param {Object} params
+ * @param {string} params.startFramePath - Absolute path to start frame image
+ * @param {string|null} params.endFramePath - Absolute path to end frame image (null for start-only)
+ * @param {string} params.prompt - Generation prompt (camera/action description)
+ * @param {Object} params.settings - { draft, model, aspect, duration }
+ * @param {string|null} params.boardId - Board ID to navigate to (null = Ideas page)
+ * @returns {{ id: string, state: string }}
+ */
+export async function submitKeyframeGeneration(session, params) {
+  const { startFramePath, endFramePath, prompt, settings = {}, boardId } = params;
+
+  if (boardId) {
+    await session.navigateToBoard(boardId);
+  } else {
+    await session.navigateToIdeas();
+  }
+
+  // Switch to Keyframe mode
+  await session.switchMode('Keyframe');
+
+  // Upload start frame
+  await session.uploadToFrameSlot('start', startFramePath);
+
+  // Upload end frame if provided
+  if (endFramePath) {
+    await session.uploadToFrameSlot('end', endFramePath);
+  }
+
+  // Apply settings (draft, model, etc.)
+  await session.setSettings(settings);
+
+  // Submit with prompt and capture generation ID
+  const generationId = await session.submitPrompt(prompt);
+  return { id: generationId, state: 'queued' };
+}
+
+/**
+ * Extend a completed video using the platform's Extend Video tool.
+ * Grabs the last frame of the source, optionally uploads an end frame,
+ * and submits with a continuation prompt.
+ *
+ * @param {PlatformSession} session
+ * @param {Object} params
+ * @param {string} params.generationId - Source generation to extend from
+ * @param {string|null} params.endFramePath - End frame image for guided extension
+ * @param {string} params.prompt - Continuation prompt
+ * @param {string|null} params.boardId
+ * @returns {{ id: string, state: string }}
+ */
+export async function extendWithEndFrame(session, params) {
+  const { generationId, endFramePath, prompt, boardId } = params;
+
+  await session.navigateToIdea(generationId, boardId);
+
+  // Click Extend Video button
+  await session.clickAction('Extend Video');
+
+  // The platform auto-fills the start frame from the last frame of the source.
+  // If we have an end frame, upload it to the end frame slot.
+  if (endFramePath) {
+    await session.uploadToFrameSlot('end', endFramePath);
+  }
+
+  // Submit with continuation prompt
+  const newId = await session.submitPrompt(prompt);
+  return { id: newId, state: 'queued' };
+}
+
+/**
+ * Apply Upscale + HDR to a completed generation.
+ *
+ * @param {PlatformSession} session
+ * @param {Object} params
+ * @param {string} params.generationId
+ * @param {string|null} params.boardId
+ * @returns {{ id: string, state: string }}
+ */
+export async function upscaleGeneration(session, params) {
+  const { generationId, boardId } = params;
+
+  await session.navigateToIdea(generationId, boardId);
+
+  // Click Upscale + HDR button and capture new generation
+  const capturePromise = session.interceptGeneration(60000);
+  await session.clickAction('Upscale');
+  const newId = await capturePromise;
+  return { id: newId, state: 'queued' };
+}
+
+/**
+ * Add AI-generated audio to a completed generation.
+ *
+ * @param {PlatformSession} session
+ * @param {Object} params
+ * @param {string} params.generationId
+ * @param {string} params.audioPrompt - Description of desired audio
+ * @param {string|null} params.boardId
+ * @returns {{ id: string, state: string }}
+ */
+export async function addAudioOnPlatform(session, params) {
+  const { generationId, audioPrompt, boardId } = params;
+  const page = session.page;
+
+  await session.navigateToIdea(generationId, boardId);
+
+  // Click Audio button to open dialog
+  await session.clickAction('Audio');
+
+  // The Audio dialog has "Add Description" and "Create" buttons
+  // Click "Add Description" to reveal the text input
+  const addDescBtn = page.locator('button').filter({ hasText: /add description/i }).first();
+  if (await addDescBtn.isVisible({ timeout: 3000 })) {
+    await addDescBtn.click();
+    await page.waitForTimeout(300);
+  }
+
+  // Fill the audio description
+  const audioInput = page.locator('textbox, textarea, input[type="text"]')
+    .filter({ hasText: /describe audio/i }).first()
+    || page.locator('[placeholder*="audio"], [placeholder*="describe"]').first();
+
+  if (await audioInput.isVisible({ timeout: 3000 })) {
+    await audioInput.fill(audioPrompt);
+  }
+
+  // Click Create and capture generation
+  const capturePromise = session.interceptGeneration(60000);
+  const createBtn = page.locator('button').filter({ hasText: /^create$/i }).first();
+  await createBtn.click();
+  const newId = await capturePromise;
+  return { id: newId, state: 'queued' };
+}
+
+/**
+ * Reframe a generation to a new aspect ratio with AI outpainting.
+ *
+ * @param {PlatformSession} session
+ * @param {Object} params
+ * @param {string} params.generationId
+ * @param {string} params.targetAspect - '9:16' | '3:4' | '1:1' | '4:3' | '16:9' | '21:9'
+ * @param {string} params.fillPrompt - What to generate in expanded areas
+ * @param {string|null} params.boardId
+ * @returns {{ id: string, state: string }}
+ */
+export async function reframeGeneration(session, params) {
+  const { generationId, targetAspect, fillPrompt, boardId } = params;
+  const page = session.page;
+
+  await session.navigateToIdea(generationId, boardId);
+
+  // Click Reframe button — opens the reframe editor
+  await session.clickAction('Reframe');
+
+  // Select target aspect ratio
+  const aspectBtn = page.locator('button').filter({ hasText: targetAspect }).first();
+  if (await aspectBtn.isVisible({ timeout: 3000 })) {
+    await aspectBtn.click();
+    await page.waitForTimeout(500);
+  }
+
+  // Fill the "Describe what to add" prompt
+  const promptInput = page.locator('[placeholder*="add"], [placeholder*="describe"], textbox').first();
+  if (await promptInput.isVisible({ timeout: 3000 })) {
+    await promptInput.fill(fillPrompt);
+  }
+
+  // Submit — capture generation from the send button
+  const capturePromise = session.interceptGeneration(60000);
+  const sendBtn = page.locator('button').filter({ hasText: /preview|generate|create/i }).last()
+    || page.locator('button:not([disabled])').last();
+  await sendBtn.click();
+  const newId = await capturePromise;
+  return { id: newId, state: 'queued' };
+}
+
+/**
+ * Poll a generation until it completes or times out.
+ * Uses the photon/v2 API via the session's authenticated cookies.
+ *
+ * @param {PlatformSession} session
+ * @param {string} generationId
+ * @param {Object} options - { timeoutMs, pollIntervalMs, onProgress }
+ * @returns {{ state, videoUrl, lastFrameUrl, thumbnailUrl }}
+ */
+export async function waitForGeneration(session, generationId, options = {}) {
+  const timeoutMs = options.timeoutMs || 300000; // 5 min default
+  const pollInterval = options.pollIntervalMs || 5000;
+  const onProgress = options.onProgress || (() => {});
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const data = await session.getGenerationStatus(generationId);
+
+    if (data?.error) {
+      throw new Error(`Generation ${generationId} error: ${data.error}`);
+    }
+
+    const state = data?.state || data?.status || 'unknown';
+    onProgress({ state, data });
+
+    if (state === 'completed' || state === 'complete') {
+      return {
+        state: 'completed',
+        videoUrl: data.artifact?.video?.url || null,
+        lastFrameUrl: data.artifact?.last_frame?.url || null,
+        thumbnailUrl: data.artifact?.thumbnail?.url || null,
+      };
+    }
+
+    if (state === 'failed' || state === 'error') {
+      throw new Error(`Generation ${generationId} failed: ${data.failure_reason || 'unknown'}`);
+    }
+
+    await new Promise(r => setTimeout(r, pollInterval));
+  }
+
+  throw new Error(`Generation ${generationId} timed out after ${timeoutMs}ms`);
+}
+
+/**
+ * Download the last frame of a completed generation to a local file.
+ * Used for serial chaining: shot N's last frame → shot N+1's start frame.
+ *
+ * @param {PlatformSession} session
+ * @param {string} generationId
+ * @param {string} destPath - Local file path to save the image
+ * @returns {{ path: string, url: string }}
+ */
+export async function downloadLastFrame(session, generationId, destPath) {
+  const lastFrameUrl = await session.getLastFrameUrl(generationId);
+  if (!lastFrameUrl) {
+    throw new Error(`No last frame URL for generation ${generationId}`);
+  }
+  await downloadFile(lastFrameUrl, destPath);
+  return { path: destPath, url: lastFrameUrl };
+}

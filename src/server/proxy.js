@@ -750,3 +750,445 @@ export function createDreamMiddleware(anthropicKey) {
     next();
   };
 }
+
+// ─── Auteur middleware (Sprint 04) ──────────────────────────────────────────
+export function createAuteurMiddleware(anthropicKey) {
+  return (req, res, next) => {
+    const json = (status, body) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+
+    const readBody = (cb) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        try { cb(JSON.parse(body)); }
+        catch { json(400, { error: 'Invalid JSON' }); }
+      });
+    };
+
+    // POST /api/auteur/start
+    if (req.url === '/start' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getProject } = await import('./db.js');
+          const { startAuteurSession } = await import('./auteur-session.js');
+
+          const project = getProject(payload.projectId);
+          if (!project) return json(404, { error: 'Project not found' });
+
+          const run = project.runs?.find(r => r.id === payload.runId) || project.runs?.[project.runs.length - 1];
+          if (!run) return json(404, { error: 'Run not found' });
+
+          const mode = payload.mode || 'auteur';
+          const settings = {
+            ...project.settings?.auteur,
+            vision: project.settings?.vision,
+            ...payload.settings,
+          };
+
+          const session = startAuteurSession(project, run, mode, settings, anthropicKey);
+          json(200, { started: true, projectId: project.id, runId: run.id, mode });
+        } catch (e) {
+          json(500, { error: e.message });
+        }
+      });
+      return;
+    }
+
+    // GET /api/auteur/status → SSE stream
+    if (req.url.startsWith('/status') && req.method === 'GET') {
+      const projectIdMatch = req.url.match(/[?&]projectId=([^&]+)/);
+      const projectId = projectIdMatch?.[1] || null;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write('\n');
+
+      if (projectId) {
+        import('./auteur-session.js').then(({ addAuteurSSEClient, getAuteurSession }) => {
+          addAuteurSSEClient(projectId, res);
+          const session = getAuteurSession(projectId);
+          if (session) {
+            res.write(`event: state\ndata: ${JSON.stringify(session.getState())}\n\n`);
+          }
+        });
+      }
+      return;
+    }
+
+    // POST /api/auteur/respond
+    if (req.url === '/respond' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getAuteurSession } = await import('./auteur-session.js');
+          const session = getAuteurSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active auteur session' });
+          session.handleResponse(payload.response);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/auteur/pause
+    if (req.url === '/pause' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getAuteurSession } = await import('./auteur-session.js');
+          const session = getAuteurSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active auteur session' });
+          session.pause();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/auteur/resume
+    if (req.url === '/resume' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getAuteurSession } = await import('./auteur-session.js');
+          const session = getAuteurSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active auteur session' });
+          session.resume();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/auteur/abort
+    if (req.url === '/abort' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getAuteurSession } = await import('./auteur-session.js');
+          const session = getAuteurSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active auteur session' });
+          session.abort();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    next();
+  };
+}
+
+// ─── War Room middleware ──────────────────────────────────────────────────────
+export function createWarRoomMiddleware(anthropicKey, geminiKey) {
+  return (req, res, next) => {
+    const json = (status, body) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+
+    const readBody = (cb) => {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        try { cb(JSON.parse(body)); }
+        catch { json(400, { error: 'Invalid JSON' }); }
+      });
+    };
+
+    // POST /api/war-room/start
+    if (req.url === '/start' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { startWarRoomSession } = await import('./war-room-session.js');
+          const session = startWarRoomSession(payload.projectId, anthropicKey, geminiKey);
+          json(200, { ok: true, projectId: payload.projectId });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/message
+    if (req.url === '/message' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.handleHumanMessage(payload.text);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/connect
+    if (req.url === '/connect' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          const result = await session.connectPlatform(payload.boardId);
+          json(200, result);
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/keyframe
+    if (req.url === '/keyframe' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.geminiGenerateKeyframe(payload.prompt);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/push
+    if (req.url === '/push' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.pushAssetToPlatform(payload.assetId);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/platform-prompt
+    if (req.url === '/platform-prompt' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.platformPrompt(payload.message, payload.attachImages);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/run-production — full autonomous shot production
+    if (req.url === '/run-production' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          // Fire-and-forget: streams back via SSE
+          session.runFullProduction(payload.shots || []);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/traverse — Gemini vision scout
+    if (req.url === '/traverse' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          // Fire-and-forget: traversal streams back via SSE
+          session.geminiTraverse(payload.goal || 'Survey the board');
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/screenshot
+    if (req.url === '/screenshot' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.captureScreenshot();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/pause
+    if (req.url === '/pause' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.pause();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/resume
+    if (req.url === '/resume' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.resume();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/abort
+    if (req.url === '/abort' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.abort();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // GET /api/war-room/status → SSE stream
+    if (req.url.startsWith('/status') && req.method === 'GET') {
+      const projectIdMatch = req.url.match(/[?&]projectId=([^&]+)/);
+      const projectId = projectIdMatch?.[1] || null;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write('\n');
+
+      if (projectId) {
+        import('./war-room-session.js').then(({ addWarRoomSSEClient, getWarRoomSession }) => {
+          addWarRoomSSEClient(projectId, res);
+          const session = getWarRoomSession(projectId);
+          if (session) {
+            res.write(`event: state\ndata: ${JSON.stringify(session.getState())}\n\n`);
+            // Replay dialogue for reconnecting clients
+            for (const turn of session.dialogue) {
+              res.write(`event: dialogue\ndata: ${JSON.stringify(turn)}\n\n`);
+            }
+            for (const asset of session.assets) {
+              res.write(`event: asset\ndata: ${JSON.stringify(asset)}\n\n`);
+            }
+          }
+        });
+      }
+      return;
+    }
+
+    next();
+  };
+}
+
+// ─── Realms middleware (app.lumalabs.ai) ─────────────────────────────────────
+export function createRealmsMiddleware() {
+  return (req, res, next) => {
+    const json = (status, body) => {
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+
+    const readBody = (cb) => {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        try { cb(JSON.parse(body)); }
+        catch { json(400, { error: 'Invalid JSON' }); }
+      });
+    };
+
+    if (req.url === '/check' && req.method === 'GET') {
+      import('./realms-session.js').then(({ checkRealmsSession }) => {
+        checkRealmsSession().then(r => json(200, r)).catch(e => json(500, { error: e.message }));
+      });
+      return;
+    }
+
+    if (req.url === '/login' && req.method === 'POST') {
+      import('./realms-session.js').then(({ openRealmsLogin }) => {
+        openRealmsLogin().then(r => json(200, r)).catch(e => json(500, { error: e.message }));
+      });
+      return;
+    }
+
+    // GET /api/realms/canvas-stream?boardId=xxx — live canvas screenshot feed via SSE
+    if (req.url.startsWith('/canvas-stream') && req.method === 'GET') {
+      const boardIdMatch = req.url.match(/[?&]boardId=([^&]+)/);
+      const boardId = boardIdMatch?.[1] || null;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write('\n');
+
+      import('./realms-session.js').then(async ({ RealmsSession }) => {
+        const session = new RealmsSession({ headless: true });
+        await session.acquire();
+        if (boardId) await session.navigateToBoard(boardId);
+
+        const interval = setInterval(async () => {
+          try {
+            const buf = await session.screenshot();
+            res.write(`event: frame\ndata: ${JSON.stringify({ imageBase64: buf.toString('base64') })}\n\n`);
+          } catch { clearInterval(interval); }
+        }, 3000);
+
+        res.on('close', async () => {
+          clearInterval(interval);
+          await session.release().catch(() => {});
+        });
+      }).catch(e => {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: e.message })}\n\n`);
+      });
+      return;
+    }
+
+    if (req.url === '/prompt' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { boardId, message, attachImages } = payload;
+          const { RealmsSession } = await import('./realms-session.js');
+          const session = new RealmsSession({ headless: true });
+          await session.acquire();
+          try {
+            if (boardId) await session.navigateToBoard(boardId);
+            else await session.navigateToNewBoard();
+            if (attachImages?.length) {
+              for (const imgPath of attachImages) await session.attachImage(imgPath);
+            }
+            const genId = await session.prompt(message, { captureGenId: true, timeout: 30000 });
+            json(200, { ok: true, boardId: session.boardId, generationId: genId });
+          } finally {
+            await session.release();
+          }
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    next();
+  };
+}
