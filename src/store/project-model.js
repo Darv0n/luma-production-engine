@@ -16,9 +16,10 @@
 export function createDefaultSettings() {
   return {
     mode: 'hybrid',          // 'manual' | 'hybrid' | 'auto'
-    auteur: 'none',          // 'none' | 'ai' | director id
+    vision: '',              // free text — "Kubrick", "rain on hot asphalt", anything
     mood: 'neutral',         // 'neutral' | 'intimate' | 'epic' | 'unsettling' | 'warm' | 'cold'
     energy: 'building',      // 'still' | 'building' | 'urgent' | 'explosive'
+    lumaBrain: false,        // platform AI brainstorm toggle
     hardStops: {
       afterArc: false,       // pause after ARC for creative review
       afterShots: false,     // pause after SHOTS for prompt review

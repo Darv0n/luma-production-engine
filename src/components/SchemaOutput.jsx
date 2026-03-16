@@ -432,20 +432,16 @@ export default function SchemaOutput({
   const dialogueCreativeDirection = projectSettings ? {
     mood: projectSettings.mood || 'neutral',
     energy: projectSettings.energy || 'building',
-    auteur: projectSettings.auteur || 'none',
+    vision: projectSettings.vision || '',
   } : null;
 
   // ─── Auteur application ───────────────────────────────────────────────────
   const handleApplyAuteur = useCallback(async () => {
-    if (!projectSettings?.auteur || projectSettings.auteur === 'none') return;
+    if (!projectSettings?.vision) return;
     setApplyingAuteur(true);
     try {
       let updatedShots;
-      if (projectSettings.auteur === 'ai') {
-        updatedShots = await applyAiAuteur(shots, arcData, concept);
-      } else {
-        updatedShots = applyDirectorPreset(shots, arcData, projectSettings.auteur);
-      }
+      updatedShots = await applyAiAuteur(shots, arcData, concept);
       // Single bulk update — avoids React stale closure when looping setFinalResult
       if (onBulkUpdateShots) {
         onBulkUpdateShots(updatedShots);
@@ -876,7 +872,7 @@ export default function SchemaOutput({
                   </span>
                   <button
                     onClick={() => (isEditing ? saveEdit(i) : startEdit(i))}
-                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "8px" }}
+                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "9px" }}
                   >
                     {isEditing ? "SAVE" : "EDIT"}
                   </button>
@@ -898,9 +894,10 @@ export default function SchemaOutput({
                       ...S.btnSec, padding: "4px 10px", fontSize: "9px",
                       color: dialogueStates[i]?.state === "approved" ? "#5a9a6a"
                         : dialogueStates[i]?.state === "active" ? "#b89c4a"
-                        : "rgba(232,228,222,0.3)",
+                        : "rgba(232,228,222,0.55)",
                       borderColor: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.3)"
-                        : dialogueStates[i]?.state === "active" ? "rgba(184,156,74,0.3)" : undefined,
+                        : dialogueStates[i]?.state === "active" ? "rgba(184,156,74,0.3)"
+                        : "rgba(232,228,222,0.15)",
                       background: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.05)" : undefined,
                     }}
                     title="Auteur Dialogue — collaborative shot direction"
@@ -910,7 +907,7 @@ export default function SchemaOutput({
                   {/* Phase 3: Pivot badge */}
                   {i === pivotIdx && (
                     <span style={{
-                      ...S.mono, fontSize: "7px", letterSpacing: "1px", padding: "2px 6px",
+                      ...S.mono, fontSize: "8px", letterSpacing: "1px", padding: "3px 8px",
                       color: "#6a8ab8", borderRadius: "2px",
                       border: "1px solid rgba(106,138,184,0.3)",
                       background: "rgba(106,138,184,0.06)",
@@ -920,7 +917,7 @@ export default function SchemaOutput({
                   )}
                   <button
                     onClick={() => handleCopyPrompt(i)}
-                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "8px" }}
+                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "9px" }}
                   >
                     {copiedIdx === i ? "✓" : "COPY"}
                   </button>
@@ -1246,36 +1243,36 @@ export default function SchemaOutput({
               {/* Vision + Audio + Cut */}
               <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: "200px" }}>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     VISION{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.vision}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.vision}</span>
                 </div>
                 <div style={{ flex: 1, minWidth: "200px" }}>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     AUDIO{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.audio}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.audio}</span>
                 </div>
               </div>
               <div style={{ display: "flex", gap: "16px", marginTop: "4px", flexWrap: "wrap" }}>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
-                    CUT →{" "}
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
+                    CUT{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.cutType}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.cutType}</span>
                 </div>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     RISK{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.knownRisk}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.knownRisk}</span>
                 </div>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     CHANGE{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.change}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.change}</span>
                 </div>
               </div>
             </div>

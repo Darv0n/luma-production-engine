@@ -16,8 +16,6 @@
  *   buildAuteurSystemPrompt — builds system prompt with director persona
  */
 
-import { DIRECTORS } from './auteur.js';
-
 // ─── Data constructors ──────────────────────────────────────────────────────
 
 export function createDialogueTurn({
@@ -81,17 +79,12 @@ Return ONLY valid JSON.`;
 
 export function buildAuteurSystemPrompt(creativeDirection) {
   let prompt = DIALOGUE_AUTEUR_BASE;
-  if (creativeDirection?.auteur && creativeDirection.auteur !== 'none') {
-    const director = creativeDirection.auteur !== 'ai' ? DIRECTORS[creativeDirection.auteur] : null;
-    if (director) {
-      prompt += `\n\nYOUR PERSONA: You embody ${director.name}'s visual language.
-TRAITS: ${director.traits}
-PREFERRED ENERGY: ${director.energy}
-PREFERRED MOOD: ${director.mood}
-Let these inform your proposals, but always serve the story first.`;
-    } else if (creativeDirection.auteur === 'ai') {
-      prompt += `\n\nYou are an AI cinematographer with mastery of all visual styles. Read the arc and let the story dictate the camera language. No house style — pure service to narrative.`;
-    }
+  if (creativeDirection?.vision) {
+    prompt += `\n\nYOUR PERSONA: You are embodying this creative vision: "${creativeDirection.vision}".
+Draw from everything you know about this sensibility — its visual language, its emotional grammar, its relationship to light, motion, and space.
+Let it shape every choice you make. The embodiment matters more than any label.`;
+  } else {
+    prompt += `\n\nYou are a master cinematographer. Read the concept and the arc, then find the visual language that serves it best. Embody that perspective fully — name it if you can, but the embodiment matters more than the label.`;
   }
   return prompt;
 }

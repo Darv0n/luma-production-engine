@@ -363,6 +363,20 @@ export function createPlatformMiddleware() {
       return;
     }
 
+    // GET /api/platform/screenshot
+    if (req.url === '/screenshot' && req.method === 'GET') {
+      (async () => {
+        try {
+          const { captureScreenshot } = await import('./luma-platform.js');
+          const result = await captureScreenshot();
+          json(200, result);
+        } catch (e) {
+          json(500, { error: e.message });
+        }
+      })();
+      return;
+    }
+
     // POST /api/platform/char-ref
     if (req.url === '/char-ref' && req.method === 'POST') {
       let body = Buffer.alloc(0);

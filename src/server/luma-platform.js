@@ -419,3 +419,38 @@ export async function submitCharRefVideo(shot, imageBuffer, imageExt = 'jpg') {
     try { fs.unlinkSync(tempPath); } catch { /* best effort cleanup */ }
   }
 }
+
+// ─── Platform eyes — screenshot capture ─────────────────────────────────────
+
+/**
+ * Capture a screenshot of the current platform state.
+ * Fallback/debug channel when DOM selectors break.
+ *
+ * @param {Object} options - { fullPage?: boolean, clip?: { x, y, width, height } }
+ * @returns {Promise<{ imageBase64, width, height }>}
+ */
+export async function captureScreenshot(options = {}) {
+  let context = null;
+  try {
+    context = await chromium.launchPersistentContext(SESSION_DIR, {
+      headless: true,
+      viewport: { width: 1280, height: 800 },
+    });
+    const page = context.pages()[0] || await context.newPage();
+
+    const buffer = await page.screenshot({
+      type: 'png',
+      fullPage: options.fullPage || false,
+      clip: options.clip || undefined,
+    });
+
+    const viewport = page.viewportSize();
+    return {
+      imageBase64: buffer.toString('base64'),
+      width: viewport?.width || 1280,
+      height: viewport?.height || 800,
+    };
+  } finally {
+    if (context) await context.close();
+  }
+}

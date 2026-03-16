@@ -63,11 +63,11 @@ ${(arcData.beats || []).map((b, i) => `  ${i + 1}. [${((b.position || 0) * 100).
 PIVOT POSITION: ${arcData.pivotPosition}
 PIVOT IMAGE: "${arcData.pivotImage}"
 CONTRAST AT PIVOT: "${arcData.contrast}"
-${creativeDirection && (creativeDirection.mood !== 'neutral' || creativeDirection.energy !== 'building' || (creativeDirection.auteur && creativeDirection.auteur !== 'none')) ? `
+${creativeDirection ? `
 CREATIVE DIRECTION:
   MOOD: ${creativeDirection.mood || 'neutral'}
-  ENERGY: ${creativeDirection.energy || 'building'}${creativeDirection.auteurDescription ? `
-  AUTEUR LENS: ${creativeDirection.auteurDescription}` : ''}
+  ENERGY: ${creativeDirection.energy || 'building'}${creativeDirection.vision ? `
+  VISION: ${creativeDirection.vision}` : ''}
 ` : ''}${characterHint}
 Generate exactly ${arcData.beats?.length || 6} shots mapping 1:1 to the arc beats above.
 
