@@ -333,19 +333,23 @@ export class DreamMachineSession {
           }
         );
 
-        if (response === 'approve' || response?.action === 'approve') {
+        if (response === 'abort' || response?.action === 'abort') {
+          state.status = 'failed';
+          this.addLog(`Shot ${idx + 1} aborted by user.`);
+          return;
+        } else if (response === 'approve' || response?.action === 'approve') {
           state.status = 'approved';
           this.addLog(`Shot ${idx + 1} manually approved.`);
         } else if (response === 'modify' || response?.action === 'modify') {
           const modPrompt = response?.prompt || shot.prompt;
           const modResult = await modifyGeneration(gen.id, modPrompt, this.boardId);
           state.generationId = modResult.id;
-          // Re-poll and re-evaluate (recursive would work but keep it flat)
           this.addLog(`Shot ${idx + 1} modified, re-processing...`);
           await this.processShot(idx);
           return;
         } else {
-          // Regenerate
+          // Regenerate (but honor abort flag)
+          if (this.aborted) return;
           this.addLog(`Shot ${idx + 1} regenerating (attempt ${state.attempts + 1})...`);
           await this.processShot(idx);
           return;
@@ -361,6 +365,10 @@ export class DreamMachineSession {
             choices: ['approve', 'skip'],
           }
         );
+        if (response === 'abort' || response?.action === 'abort') {
+          state.status = 'failed';
+          return;
+        }
         state.status = response === 'skip' ? 'failed' : 'approved';
       }
 

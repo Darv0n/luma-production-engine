@@ -120,8 +120,17 @@ export default function DreamMachinePanel({ projectId, runId, shots, settings })
   // ── Check-in response ─────────────────────────────────────────────────
 
   const handleRespond = async (action) => {
-    const response = action || responseText || 'approve';
-    await respondToDream(projectId, typeof action === 'string' ? action : { action, prompt: responseText });
+    let response;
+    if (typeof action === 'string') {
+      // Quick action button — include responseText if user typed steering text
+      response = responseText.trim()
+        ? { action, prompt: responseText }
+        : action;
+    } else {
+      // Free-text submit (no action passed)
+      response = responseText || 'approve';
+    }
+    await respondToDream(projectId, response);
     setResponseText('');
   };
 
