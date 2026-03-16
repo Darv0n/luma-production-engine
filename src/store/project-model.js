@@ -15,7 +15,7 @@
  */
 export function createDefaultSettings() {
   return {
-    mode: 'hybrid',          // 'manual' | 'hybrid' | 'auto'
+    mode: 'hybrid',          // 'manual' | 'hybrid' | 'auto' | 'dream'
     vision: '',              // free text — "Kubrick", "rain on hot asphalt", anything
     mood: 'neutral',         // 'neutral' | 'intimate' | 'epic' | 'unsettling' | 'warm' | 'cold'
     energy: 'building',      // 'still' | 'building' | 'urgent' | 'explosive'
@@ -32,6 +32,12 @@ export function createDefaultSettings() {
       audioTemplate: '',
       autoAudio: true,
       autoUpscale: '1080p',
+    },
+    dreamMachine: {
+      autoApproveThreshold: 80,  // score above this = auto-approve
+      maxRetries: 3,             // max regenerations per shot
+      batchSize: 3,              // shots per batch before check-in
+      continuityPass: true,      // grab stills + re-chain weak transitions
     },
   };
 }

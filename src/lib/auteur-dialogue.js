@@ -27,18 +27,22 @@ export function createDialogueTurn({
   keyframeUrl = null,
   variations = null,
   approved = false,
+  evaluation = null,
+  screenshotB64 = null,
 }) {
   return {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     role,       // 'auteur' | 'human'
     timestamp: new Date().toISOString(),
-    type,       // 'proposal' | 'feedback' | 'approval' | 'alternatives' | 'settings-change' | 'keyframe'
+    type,       // 'proposal' | 'feedback' | 'approval' | 'alternatives' | 'settings-change' | 'keyframe' | 'check-in' | 'generation-result' | 'decision'
     message,
     prompt,
     settings,
     keyframeUrl,
     variations,
     approved,
+    evaluation,       // { score, assessment, issues, recommendation } — for generation-result turns
+    screenshotB64,    // base64 screenshot — for generation-result turns
   };
 }
 

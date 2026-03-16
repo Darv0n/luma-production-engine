@@ -21,12 +21,14 @@ const MODE_COLORS = {
   manual: '#5a9a6a',
   hybrid: '#b89c4a',
   auto: '#6a8ab8',
+  dream: '#8a6ab8',
 };
 
 const MODE_LABELS = {
   manual: { label: 'MANUAL', sub: 'you are god' },
   hybrid: { label: 'HYBRID', sub: 'we are god' },
   auto: { label: 'AUTO', sub: 'ok claude' },
+  dream: { label: 'DREAM', sub: 'auteur takes the wheel' },
 };
 
 function Chip({ active, onClick, children, color }) {
@@ -153,6 +155,22 @@ export default function CreativeDirection({ settings, onUpdate }) {
           </span>
         )}
       </div>
+
+      {/* Dream mode note */}
+      {mode === 'dream' && (
+        <div style={{
+          ...S.mono,
+          fontSize: '9px',
+          color: '#8a6ab8',
+          padding: '8px 12px',
+          background: 'rgba(138,106,184,0.05)',
+          border: '1px solid rgba(138,106,184,0.15)',
+          borderRadius: '3px',
+          lineHeight: '1.6',
+        }}>
+          Auteur operates Dream Machine autonomously. You approve at critical moments.
+        </div>
+      )}
     </div>
   );
 }

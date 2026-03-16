@@ -656,6 +656,8 @@ export default function ProjectWorkspace() {
             onUpdateSettings={handleUpdateSettings}
             projectKeyframes={projectKeyframes}
             onUpdateKeyframes={handleUpdateKeyframes}
+            projectId={id}
+            runId={currentRunId}
           />
         </div>
       )}

@@ -12,6 +12,8 @@ import { applyDirectorPreset, applyAiAuteur, generateAuteurBrainstorm, evaluateB
 import { callAPI } from "../lib/api.js";
 import AuteurDialogue from "./AuteurDialogue.jsx";
 import { createShotDialogue } from "../lib/auteur-dialogue.js";
+import DreamMachinePanel from "./DreamMachinePanel.jsx";
+import AssemblyPanel from "./AssemblyPanel.jsx";
 
 const POLL_INTERVAL = 5000; // ms
 const ROW_INLINE = { display: "flex", alignItems: "center", flexWrap: "wrap" };
@@ -33,6 +35,8 @@ export default function SchemaOutput({
   onBulkUpdateShots,
   projectKeyframes = [],
   onUpdateKeyframes,
+  projectId = null,
+  runId = null,
 }) {
   // Destructure result up front so hooks below can reference shots safely
   const { analysis, arcData, shots, validations } = result;
@@ -66,7 +70,7 @@ export default function SchemaOutput({
   const pivotIdx = detectPivotShot(shots, arcData);
 
   // Draft generation state
-  const [mode, setMode] = useState("schema"); // "schema" | "draft" | "hybrid"
+  const [mode, setMode] = useState("schema"); // "schema" | "draft" | "hybrid" | "dream"
   const [draftStates, setDraftStates] = useState(initialDrafts || {});
   const draftStatesRef = useRef(initialDrafts || {});
   const pollRef = useRef(null);
@@ -681,7 +685,7 @@ export default function SchemaOutput({
 
       {/* Mode tabs */}
       <div style={{ display: "flex", gap: "2px", borderBottom: "1px solid rgba(232,228,222,0.06)", paddingBottom: "12px" }}>
-        {[["schema", "SCHEMA"], ["draft", "DRAFT API"], ["hybrid", "HYBRID"]].map(([m, label]) => (
+        {[["schema", "SCHEMA"], ["draft", "DRAFT API"], ["hybrid", "HYBRID"], ["dream", "DREAM MACHINE"]].map(([m, label]) => (
           <button
             key={m}
             onClick={() => setMode(m)}
@@ -690,9 +694,9 @@ export default function SchemaOutput({
               fontSize: "9px",
               padding: "5px 12px",
               letterSpacing: "1.5px",
-              background: mode === m ? "rgba(232,228,222,0.08)" : "transparent",
-              borderColor: mode === m ? "rgba(232,228,222,0.2)" : "rgba(232,228,222,0.06)",
-              color: mode === m ? "#e8e4de" : "rgba(232,228,222,0.35)",
+              background: mode === m ? (m === "dream" ? "rgba(138,106,184,0.08)" : "rgba(232,228,222,0.08)") : "transparent",
+              borderColor: mode === m ? (m === "dream" ? "rgba(138,106,184,0.3)" : "rgba(232,228,222,0.2)") : "rgba(232,228,222,0.06)",
+              color: mode === m ? (m === "dream" ? "#8a6ab8" : "#e8e4de") : "rgba(232,228,222,0.35)",
             }}
           >
             {label}
@@ -822,8 +826,18 @@ export default function SchemaOutput({
         </div>
       </div>
 
-      {/* Per-shot cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* Dream Machine mode panel */}
+      {mode === "dream" && (
+        <DreamMachinePanel
+          projectId={projectId}
+          runId={runId}
+          shots={shots}
+          settings={projectSettings}
+        />
+      )}
+
+      {/* Per-shot cards — hidden in dream mode */}
+      {mode !== "dream" && <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {shots.map((s, i) => {
           const v = validations?.[i] || { score: 0, wordCount: 0, issues: [] };
           const isEditing = editingIdx === i;
@@ -1278,7 +1292,14 @@ export default function SchemaOutput({
             </div>
           );
         })}
-      </div>
+      </div>}
+
+      {/* Assembly panel — available in all modes when shots are complete */}
+      <AssemblyPanel
+        projectId={projectId}
+        runId={runId}
+        shotsReady={Object.values(draftStates).filter(d => d?.videoUrl).length >= 2}
+      />
 
       {/* Post-chain status strip */}
       {Object.entries(chainStates).some(([, c]) => c.phase !== 'done') && (
