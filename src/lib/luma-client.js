@@ -350,3 +350,212 @@ export async function submitCharRef(shot, imageBase64, imageExt = 'jpg') {
 
   return res.json();
 }
+
+// ─── Phase 2B: Expanded platform operations ─────────────────────────────────
+
+/**
+ * Create a new board on the platform.
+ * @param {string} name - Board name
+ */
+export async function createPlatformBoard(name) {
+  const res = await fetch('/api/platform/board/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Board creation error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Submit a generation on a platform board.
+ * @param {string} boardId
+ * @param {Object} shot
+ */
+export async function generateOnBoard(boardId, shot) {
+  const res = await fetch(`/api/platform/board/${boardId}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shot }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Board generation error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Review a board — screenshot + generation statuses.
+ * @param {string} boardId
+ */
+export async function reviewPlatformBoard(boardId) {
+  const res = await fetch(`/api/platform/board/${boardId}/review`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/**
+ * Modify a generation with a new prompt.
+ * @param {string} generationId
+ * @param {string} prompt
+ * @param {string} boardId
+ */
+export async function modifyPlatformGeneration(generationId, prompt, boardId) {
+  const res = await fetch('/api/platform/modify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ generationId, prompt, boardId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Modify error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Extend a generation.
+ * @param {string} generationId
+ * @param {string} boardId
+ */
+export async function extendPlatformGeneration(generationId, boardId) {
+  const res = await fetch('/api/platform/extend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ generationId, boardId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Extend error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get full generation status from platform API.
+ * @param {string} generationId
+ */
+export async function getPlatformGenerationStatus(generationId) {
+  const res = await fetch(`/api/platform/generation/status/${generationId}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/**
+ * Extract a still frame from a generation.
+ * @param {string} generationId
+ */
+export async function extractPlatformStill(generationId) {
+  const res = await fetch('/api/platform/still', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ generationId }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/**
+ * Download a generation video.
+ * @param {string} generationId
+ */
+export async function downloadPlatformGeneration(generationId) {
+  const res = await fetch(`/api/platform/download/${generationId}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+// ─── Dream Machine session client ───────────────────────────────────────────
+
+/**
+ * Start a Dream Machine session.
+ * @param {string} projectId
+ * @param {string} runId
+ */
+export async function startDreamSession(projectId, runId) {
+  const res = await fetch('/api/dream/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, runId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error || `Dream session error ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Connect to dream session SSE stream.
+ * @param {string} projectId
+ * @param {Function} onEvent - (eventType, data) callback
+ * @returns {EventSource}
+ */
+export function connectDreamSSE(projectId, onEvent) {
+  const es = new EventSource(`/api/dream/status?projectId=${projectId}`);
+
+  es.addEventListener('state', (e) => onEvent('state', JSON.parse(e.data)));
+  es.addEventListener('log', (e) => onEvent('log', JSON.parse(e.data)));
+  es.addEventListener('screenshot', (e) => onEvent('screenshot', JSON.parse(e.data)));
+  es.addEventListener('complete', (e) => onEvent('complete', JSON.parse(e.data)));
+
+  es.onerror = () => onEvent('error', { message: 'SSE connection lost' });
+  return es;
+}
+
+/**
+ * Send a response to a dream session check-in.
+ * @param {string} projectId
+ * @param {string|Object} response
+ */
+export async function respondToDream(projectId, response) {
+  const res = await fetch('/api/dream/respond', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, response }),
+  });
+  return res.json();
+}
+
+/**
+ * Pause the dream session.
+ * @param {string} projectId
+ */
+export async function pauseDream(projectId) {
+  const res = await fetch('/api/dream/pause', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  return res.json();
+}
+
+/**
+ * Resume the dream session.
+ * @param {string} projectId
+ */
+export async function resumeDream(projectId) {
+  const res = await fetch('/api/dream/resume', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  return res.json();
+}
+
+/**
+ * Abort the dream session.
+ * @param {string} projectId
+ */
+export async function abortDream(projectId) {
+  const res = await fetch('/api/dream/abort', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  return res.json();
+}

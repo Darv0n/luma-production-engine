@@ -12,6 +12,8 @@ import { applyDirectorPreset, applyAiAuteur, generateAuteurBrainstorm, evaluateB
 import { callAPI } from "../lib/api.js";
 import AuteurDialogue from "./AuteurDialogue.jsx";
 import { createShotDialogue } from "../lib/auteur-dialogue.js";
+import DreamMachinePanel from "./DreamMachinePanel.jsx";
+import AssemblyPanel from "./AssemblyPanel.jsx";
 
 const POLL_INTERVAL = 5000; // ms
 const ROW_INLINE = { display: "flex", alignItems: "center", flexWrap: "wrap" };
@@ -33,6 +35,8 @@ export default function SchemaOutput({
   onBulkUpdateShots,
   projectKeyframes = [],
   onUpdateKeyframes,
+  projectId = null,
+  runId = null,
 }) {
   // Destructure result up front so hooks below can reference shots safely
   const { analysis, arcData, shots, validations } = result;
@@ -66,7 +70,7 @@ export default function SchemaOutput({
   const pivotIdx = detectPivotShot(shots, arcData);
 
   // Draft generation state
-  const [mode, setMode] = useState("schema"); // "schema" | "draft" | "hybrid"
+  const [mode, setMode] = useState("schema"); // "schema" | "draft" | "hybrid" | "dream"
   const [draftStates, setDraftStates] = useState(initialDrafts || {});
   const draftStatesRef = useRef(initialDrafts || {});
   const pollRef = useRef(null);
@@ -432,20 +436,16 @@ export default function SchemaOutput({
   const dialogueCreativeDirection = projectSettings ? {
     mood: projectSettings.mood || 'neutral',
     energy: projectSettings.energy || 'building',
-    auteur: projectSettings.auteur || 'none',
+    vision: projectSettings.vision || '',
   } : null;
 
   // ─── Auteur application ───────────────────────────────────────────────────
   const handleApplyAuteur = useCallback(async () => {
-    if (!projectSettings?.auteur || projectSettings.auteur === 'none') return;
+    if (!projectSettings?.vision) return;
     setApplyingAuteur(true);
     try {
       let updatedShots;
-      if (projectSettings.auteur === 'ai') {
-        updatedShots = await applyAiAuteur(shots, arcData, concept);
-      } else {
-        updatedShots = applyDirectorPreset(shots, arcData, projectSettings.auteur);
-      }
+      updatedShots = await applyAiAuteur(shots, arcData, concept);
       // Single bulk update — avoids React stale closure when looping setFinalResult
       if (onBulkUpdateShots) {
         onBulkUpdateShots(updatedShots);
@@ -685,7 +685,7 @@ export default function SchemaOutput({
 
       {/* Mode tabs */}
       <div style={{ display: "flex", gap: "2px", borderBottom: "1px solid rgba(232,228,222,0.06)", paddingBottom: "12px" }}>
-        {[["schema", "SCHEMA"], ["draft", "DRAFT API"], ["hybrid", "HYBRID"]].map(([m, label]) => (
+        {[["schema", "SCHEMA"], ["draft", "DRAFT API"], ["hybrid", "HYBRID"], ["dream", "DREAM MACHINE"]].map(([m, label]) => (
           <button
             key={m}
             onClick={() => setMode(m)}
@@ -694,9 +694,9 @@ export default function SchemaOutput({
               fontSize: "9px",
               padding: "5px 12px",
               letterSpacing: "1.5px",
-              background: mode === m ? "rgba(232,228,222,0.08)" : "transparent",
-              borderColor: mode === m ? "rgba(232,228,222,0.2)" : "rgba(232,228,222,0.06)",
-              color: mode === m ? "#e8e4de" : "rgba(232,228,222,0.35)",
+              background: mode === m ? (m === "dream" ? "rgba(138,106,184,0.08)" : "rgba(232,228,222,0.08)") : "transparent",
+              borderColor: mode === m ? (m === "dream" ? "rgba(138,106,184,0.3)" : "rgba(232,228,222,0.2)") : "rgba(232,228,222,0.06)",
+              color: mode === m ? (m === "dream" ? "#8a6ab8" : "#e8e4de") : "rgba(232,228,222,0.35)",
             }}
           >
             {label}
@@ -826,8 +826,18 @@ export default function SchemaOutput({
         </div>
       </div>
 
-      {/* Per-shot cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* Dream Machine mode panel */}
+      {mode === "dream" && (
+        <DreamMachinePanel
+          projectId={projectId}
+          runId={runId}
+          shots={shots}
+          settings={projectSettings}
+        />
+      )}
+
+      {/* Per-shot cards — hidden in dream mode */}
+      {mode !== "dream" && <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {shots.map((s, i) => {
           const v = validations?.[i] || { score: 0, wordCount: 0, issues: [] };
           const isEditing = editingIdx === i;
@@ -876,7 +886,7 @@ export default function SchemaOutput({
                   </span>
                   <button
                     onClick={() => (isEditing ? saveEdit(i) : startEdit(i))}
-                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "8px" }}
+                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "9px" }}
                   >
                     {isEditing ? "SAVE" : "EDIT"}
                   </button>
@@ -898,9 +908,10 @@ export default function SchemaOutput({
                       ...S.btnSec, padding: "4px 10px", fontSize: "9px",
                       color: dialogueStates[i]?.state === "approved" ? "#5a9a6a"
                         : dialogueStates[i]?.state === "active" ? "#b89c4a"
-                        : "rgba(232,228,222,0.3)",
+                        : "rgba(232,228,222,0.55)",
                       borderColor: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.3)"
-                        : dialogueStates[i]?.state === "active" ? "rgba(184,156,74,0.3)" : undefined,
+                        : dialogueStates[i]?.state === "active" ? "rgba(184,156,74,0.3)"
+                        : "rgba(232,228,222,0.15)",
                       background: dialogueStates[i]?.state === "approved" ? "rgba(90,154,106,0.05)" : undefined,
                     }}
                     title="Auteur Dialogue — collaborative shot direction"
@@ -910,7 +921,7 @@ export default function SchemaOutput({
                   {/* Phase 3: Pivot badge */}
                   {i === pivotIdx && (
                     <span style={{
-                      ...S.mono, fontSize: "7px", letterSpacing: "1px", padding: "2px 6px",
+                      ...S.mono, fontSize: "8px", letterSpacing: "1px", padding: "3px 8px",
                       color: "#6a8ab8", borderRadius: "2px",
                       border: "1px solid rgba(106,138,184,0.3)",
                       background: "rgba(106,138,184,0.06)",
@@ -920,7 +931,7 @@ export default function SchemaOutput({
                   )}
                   <button
                     onClick={() => handleCopyPrompt(i)}
-                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "8px" }}
+                    style={{ ...S.btnSec, padding: "4px 10px", fontSize: "9px" }}
                   >
                     {copiedIdx === i ? "✓" : "COPY"}
                   </button>
@@ -1246,42 +1257,49 @@ export default function SchemaOutput({
               {/* Vision + Audio + Cut */}
               <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: "200px" }}>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     VISION{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.vision}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.vision}</span>
                 </div>
                 <div style={{ flex: 1, minWidth: "200px" }}>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     AUDIO{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.audio}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.audio}</span>
                 </div>
               </div>
               <div style={{ display: "flex", gap: "16px", marginTop: "4px", flexWrap: "wrap" }}>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
-                    CUT →{" "}
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
+                    CUT{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.cutType}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.cutType}</span>
                 </div>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     RISK{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.knownRisk}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.knownRisk}</span>
                 </div>
                 <div>
-                  <span style={{ ...S.mono, fontSize: "8px", ...S.dim, letterSpacing: "1.5px" }}>
+                  <span style={{ ...S.mono, fontSize: "9px", color: "rgba(232,228,222,0.4)", letterSpacing: "1.5px" }}>
                     CHANGE{" "}
                   </span>
-                  <span style={{ fontSize: "10px", ...S.mid }}>{s.change}</span>
+                  <span style={{ fontSize: "11px", ...S.mid }}>{s.change}</span>
                 </div>
               </div>
             </div>
           );
         })}
-      </div>
+      </div>}
+
+      {/* Assembly panel — available in all modes when shots are complete */}
+      <AssemblyPanel
+        projectId={projectId}
+        runId={runId}
+        shotsReady={Object.values(draftStates).filter(d => d?.videoUrl).length >= 2}
+      />
 
       {/* Post-chain status strip */}
       {Object.entries(chainStates).some(([, c]) => c.phase !== 'done') && (

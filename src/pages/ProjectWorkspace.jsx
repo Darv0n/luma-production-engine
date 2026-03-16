@@ -7,27 +7,21 @@ import { estimateCredits } from "../lib/credits.js";
 import { buildFullSchema } from "../lib/schema-builder.js";
 import { storage } from "../store/storage.js";
 import { createProject, createRun, latestRun, createDefaultSettings } from "../store/project-model.js";
-import { DIRECTORS } from "../lib/auteur.js";
 import PipelineProgress from "../components/PipelineProgress.jsx";
 import LiveResults from "../components/LiveResults.jsx";
 import SchemaOutput from "../components/SchemaOutput.jsx";
 import CreativeDirection from "../components/CreativeDirection.jsx";
+import ConceptBrainstorm from "../components/ConceptBrainstorm.jsx";
 
 function buildCreativeDirection(settings) {
   if (!settings) return null;
-  const { mood, energy, auteur } = settings;
-  const isDefault = mood === 'neutral' && energy === 'building' && (!auteur || auteur === 'none');
+  const { mood, energy, vision } = settings;
+  const isDefault = mood === 'neutral' && energy === 'building' && !vision;
   if (isDefault) return null;
-  const director = auteur && auteur !== 'none' && auteur !== 'ai' ? DIRECTORS[auteur] : null;
   return {
     mood: mood || 'neutral',
     energy: energy || 'building',
-    auteur: auteur || 'none',
-    auteurDescription: auteur === 'ai'
-      ? 'AI cinematographer — assigns camera language per emotional beat'
-      : director
-        ? `${director.name}: ${director.traits}`
-        : null,
+    vision: vision || '',
   };
 }
 
@@ -406,6 +400,16 @@ export default function ProjectWorkspace() {
             }}
           />
 
+          {/* Concept Brainstorm — directly after textarea, before format grid */}
+          {concept.trim() && (
+            <ConceptBrainstorm
+              concept={concept}
+              settings={projectSettings}
+              onUpdateSettings={handleUpdateSettings}
+              onAcceptConcept={(text) => setConcept(text)}
+            />
+          )}
+
           <div
             style={{
               display: "grid",
@@ -652,6 +656,8 @@ export default function ProjectWorkspace() {
             onUpdateSettings={handleUpdateSettings}
             projectKeyframes={projectKeyframes}
             onUpdateKeyframes={handleUpdateKeyframes}
+            projectId={id}
+            runId={currentRunId}
           />
         </div>
       )}

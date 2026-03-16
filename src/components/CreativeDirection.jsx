@@ -2,13 +2,12 @@
  * CREATIVE DIRECTION PANEL
  *
  * Pre-pipeline creative settings — visible BEFORE concept input.
- * Extracted from ProjectSettings.jsx (Sprint 04: Auteur-Directed Production).
+ * Contains: Mode / Vision / Mood / Energy / LUMA BRAIN
  *
- * Contains: Mode / Auteur / Mood / Energy / Director traits
- * These inform the pipeline from the first frame, not post-hoc.
+ * Vision is free text — the LLM embodies whatever the human describes
+ * from latent space. No fixed director list.
  */
 
-import { DIRECTOR_LIST } from '../lib/auteur.js';
 import { S } from '../styles/theme.js';
 
 const LABEL = {
@@ -22,12 +21,14 @@ const MODE_COLORS = {
   manual: '#5a9a6a',
   hybrid: '#b89c4a',
   auto: '#6a8ab8',
+  dream: '#8a6ab8',
 };
 
 const MODE_LABELS = {
   manual: { label: 'MANUAL', sub: 'you are god' },
   hybrid: { label: 'HYBRID', sub: 'we are god' },
   auto: { label: 'AUTO', sub: 'ok claude' },
+  dream: { label: 'DREAM', sub: 'auteur takes the wheel' },
 };
 
 function Chip({ active, onClick, children, color }) {
@@ -63,11 +64,10 @@ export default function CreativeDirection({ settings, onUpdate }) {
   };
 
   const mode = settings?.mode || 'hybrid';
-  const auteur = settings?.auteur || 'none';
+  const vision = settings?.vision || '';
   const mood = settings?.mood || 'neutral';
   const energy = settings?.energy || 'building';
-
-  const activeDirector = DIRECTOR_LIST.find((d) => d.id === auteur);
+  const lumaBrain = settings?.lumaBrain || false;
 
   return (
     <div style={{
@@ -100,19 +100,25 @@ export default function CreativeDirection({ settings, onUpdate }) {
         ))}
       </div>
 
-      {/* Auteur selector */}
+      {/* Vision — free text */}
       <div>
-        <div style={{ ...LABEL, marginBottom: '6px' }}>AUTEUR LENS</div>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <Chip active={auteur === 'none'} onClick={() => set('auteur', 'none')}>NONE</Chip>
-          <Chip active={auteur === 'ai'} onClick={() => set('auteur', 'ai')} color="#b89c4a">AI AUTEUR</Chip>
-          {DIRECTOR_LIST.map((d) => (
-            <Chip key={d.id} active={auteur === d.id} onClick={() => set('auteur', d.id)}>{d.name.toUpperCase()}</Chip>
-          ))}
-        </div>
-        {auteur !== 'none' && auteur !== 'ai' && activeDirector && (
-          <div style={{ ...S.mono, fontSize: '10px', color: 'rgba(232,228,222,0.25)', marginTop: '4px' }}>
-            {activeDirector.traits}
+        <div style={{ ...LABEL, marginBottom: '6px' }}>VISION</div>
+        <input
+          value={vision}
+          onChange={(e) => set('vision', e.target.value)}
+          placeholder="a name, a feeling, a reference — or leave empty for pure AI"
+          style={{
+            ...S.input,
+            fontSize: '12px',
+            padding: '8px 12px',
+            background: 'rgba(255,255,255,0.02)',
+            borderColor: vision ? 'rgba(184,156,74,0.2)' : 'rgba(232,228,222,0.06)',
+            color: vision ? '#b89c4a' : '#e8e4de',
+          }}
+        />
+        {!vision && (
+          <div style={{ ...S.mono, fontSize: '8px', color: 'rgba(232,228,222,0.15)', marginTop: '3px' }}>
+            "Kubrick" | "rain on hot asphalt" | "aggressive minimalism" | "Tarkovsky meets neon"
           </div>
         )}
       </div>
@@ -136,6 +142,35 @@ export default function CreativeDirection({ settings, onUpdate }) {
           </div>
         </div>
       </div>
+
+      {/* LUMA BRAIN toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={LABEL}>LUMA BRAIN</div>
+        <Chip active={lumaBrain} onClick={() => set('lumaBrain', !lumaBrain)} color="#6a8ab8">
+          {lumaBrain ? 'ON' : 'OFF'}
+        </Chip>
+        {lumaBrain && (
+          <span style={{ ...S.mono, fontSize: '8px', color: 'rgba(232,228,222,0.25)' }}>
+            platform AI brainstorm (~40 credits)
+          </span>
+        )}
+      </div>
+
+      {/* Dream mode note */}
+      {mode === 'dream' && (
+        <div style={{
+          ...S.mono,
+          fontSize: '9px',
+          color: '#8a6ab8',
+          padding: '8px 12px',
+          background: 'rgba(138,106,184,0.05)',
+          border: '1px solid rgba(138,106,184,0.15)',
+          borderRadius: '3px',
+          lineHeight: '1.6',
+        }}>
+          Auteur operates Dream Machine autonomously. You approve at critical moments.
+        </div>
+      )}
     </div>
   );
 }

@@ -6,8 +6,8 @@
  *   Global defaults — cascade to all shots (overridable per-shot)
  *   "Apply auteur to all shots" — post-hoc camera assignment
  *
- * Creative direction (mode/auteur/mood/energy) has been extracted
- * to CreativeDirection.jsx and lives pre-pipeline (Sprint 04).
+ * Creative direction (mode/vision/mood/energy) has been extracted
+ * to CreativeDirection.jsx and lives pre-pipeline (Sprint 04/04B).
  *
  * Mounted above the shot list in SchemaOutput.
  * Settings live in project.settings and persist to disk.
@@ -51,7 +51,7 @@ export default function ProjectSettings({
     onUpdate(next);
   };
 
-  const auteur = settings?.auteur || 'none';
+  const vision = settings?.vision || '';
   const hardStops = settings?.hardStops || {};
   const defaults = settings?.defaults || {};
 
@@ -69,7 +69,7 @@ export default function ProjectSettings({
         flexWrap: 'wrap',
       }}>
         {/* Apply auteur to all shots */}
-        {auteur !== 'none' && shots.length > 0 && (
+        {vision && shots.length > 0 && (
           <button
             onClick={onApplyAuteur}
             disabled={applyingAuteur}
