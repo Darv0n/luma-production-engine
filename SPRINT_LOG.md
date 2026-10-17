@@ -112,6 +112,93 @@
 
 ---
 
+## Sprint 04 — Platform-First Auteur Engine (2026-03-16)
+
+**Status:** Complete (backend + UI wired, ready for E2E testing)
+
+### Reframe
+
+The engine over-indexed on the Luma API (Sprint 02) when the real power is the
+Dream Machine *platform*. The public API exposes ~15% of capabilities. The platform
+has Keyframe mode, Extend Video, Reframe, Upscale+HDR, Audio, Inpainting, Visual
+Annotation, Lipsync, a full conversational AI agent, Brainstorm mode, and more.
+
+Sprint 04 pivots to platform-first with two production modes.
+
+### Built
+
+**PlatformSession (`src/server/platform-session.js`)**
+- Reusable browser context manager (one Chromium instance per production run)
+- `acquire()` / `release()` lifecycle
+- `navigateToBoard()`, `navigateToIdea()`, `navigateToIdeas()`
+- `switchMode()` — Describe/Keyframe/Reference/Modify
+- `uploadToFrameSlot()` — file upload to start/end frame chiclets
+- `setSettings()` — model, draft, aspect, duration
+- `interceptGeneration()` — network-level generation ID capture
+- `submitPrompt()` — fill + submit with ID capture
+- `apiCall()` — authenticated fetch via platform cookies
+
+**New Platform Operations (`src/server/luma-platform.js`)**
+- `submitKeyframeGeneration()` — start+end frame upload + prompt + settings
+- `extendWithEndFrame()` — Extend Video with guided end frame
+- `upscaleGeneration()` — one-click Upscale+HDR
+- `addAudioOnPlatform()` — AI audio with text prompt
+- `reframeGeneration()` — outpaint to new aspect ratio
+- `waitForGeneration()` — poll until complete with timeout
+- `downloadLastFrame()` — save last frame for shot chaining
+
+**Auteur State Machine (`src/server/auteur-session.js`)**
+- 7-phase production: THINK → DESIGN → GENERATE → CHAIN → POLISH → DELIVER → COMPLETE
+- MANUAL mode: stops after DESIGN, exports platform brief
+- AUTEUR mode: Playwright drives Dream Machine end-to-end
+- Serial generation for visual continuity (shot N's last frame → shot N+1's start)
+- Claude Vision evaluation at GENERATE with auto-approve/check-in
+- Check-in system with human decision points
+- SSE event streaming for real-time UI updates
+- Pause / Resume / Abort controls
+- Credit tracking
+
+**Server Middleware (`src/server/proxy.js`)**
+- `/api/auteur/start` — start session (projectId, runId, mode, settings)
+- `/api/auteur/status` — SSE event stream
+- `/api/auteur/respond` — human check-in response
+- `/api/auteur/pause` / `resume` / `abort`
+
+**UI Components**
+- `ProductionView.jsx` — main S04 page at `/projects/:id/produce`
+- `ProductionTimeline.jsx` — horizontal shot timeline with state badges + chain connectors
+- `ActiveOperationPanel.jsx` — phase-aware panel with check-in dialogue
+- `CreditBudget.jsx` — live credit counter
+- PRODUCE button added to SchemaOutput mode bar
+
+### Platform Inventory (from live audit)
+
+Full Dream Machine platform capabilities documented:
+- 4 creation modes: Describe, Keyframe, Reference, Modify
+- 5 post-production tools: Modify, Extend Video, Reframe, Upscale+HDR, Audio
+- Shot Palette: 4 categories, 37 tags
+- Camera Motion: 11 presets
+- Board-level AI: Brainstorm, Show More, Reply, Concept Pills
+- Luma Agent: Brainstorm Mode (ideation) + Create Mode (production)
+- Inpainting, Visual Annotation, Lipsync, More Like This
+- Version chain management, file uploads (PDFs, scripts, media)
+
+### Credit economics
+
+| Tier | 15s Ad (3 shots) | Notes |
+|------|-------------------|-------|
+| Draft (Ray3.14) | ~624 credits | Iteration tier |
+| Full (Ray3 + Char Ref) | ~2,712 credits | Production tier |
+
+### Key decisions
+
+- PlatformSession replaces per-operation browser launches (15→1 launch per run)
+- Serial chaining: shot N's last frame → shot N+1's start frame (better continuity)
+- AuteurSession is separate from DreamMachineSession (redistribution, not replacement)
+- All existing pipeline/auteur/validator code reused unchanged
+
+---
+
 ## Environment
 
 | Variable | Purpose |

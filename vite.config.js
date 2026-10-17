@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { createApiMiddleware, createLumaMiddleware, createPlatformMiddleware, createStorageMiddleware } from './src/server/proxy.js';
+import { createApiMiddleware, createLumaMiddleware, createPlatformMiddleware, createStorageMiddleware, createAssemblyMiddleware, createDreamMiddleware, createAuteurMiddleware, createRealmsMiddleware, createWarRoomMiddleware } from './src/server/proxy.js';
 
 export default defineConfig(({ mode }) => {
   // Load .env file (all vars, not just VITE_-prefixed)
@@ -20,6 +20,11 @@ export default defineConfig(({ mode }) => {
           server.middlewares.use('/api/luma', createLumaMiddleware(env.LUMA_API_KEY));
           server.middlewares.use('/api/platform', createPlatformMiddleware());
           server.middlewares.use('/api/storage', createStorageMiddleware());
+          server.middlewares.use('/api/assembly', createAssemblyMiddleware());
+          server.middlewares.use('/api/dream', createDreamMiddleware(env.ANTHROPIC_API_KEY));
+          server.middlewares.use('/api/auteur', createAuteurMiddleware(env.ANTHROPIC_API_KEY));
+          server.middlewares.use('/api/realms', createRealmsMiddleware());
+          server.middlewares.use('/api/war-room', createWarRoomMiddleware(env.ANTHROPIC_API_KEY, env.GEMINI_API_KEY));
         },
       },
     ],

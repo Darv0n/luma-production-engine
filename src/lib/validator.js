@@ -9,22 +9,20 @@
  * and the pipeline's auto-fix pass corrects them.
  */
 
+// Dead words from LUMA1 — confirmed quality-degrading in Dream Machine / Realms
 const DEAD_WORDS = [
-  "vibrant",
-  "whimsical",
-  "hyper-realistic",
-  "beautiful",
-  "amazing",
-  "stunning",
-  "cinematic",
-  "8k",
-  "4k",
-  "masterpiece",
-  "trending",
-  "professional",
-  "high quality",
-  "detailed",
-  "best quality",
+  // Oversaturation / uncanny triggers
+  "vibrant", "whimsical", "hyper-realistic",
+  // Empty descriptor budget-burners
+  "beautiful", "amazing", "stunning", "professional",
+  "high quality", "detailed", "best quality",
+  // Overused noise
+  "cinematic",  // use specific camera/lighting terms instead
+  "masterpiece", "trending",
+  // Resolution keywords that do nothing in video generation
+  "8k", "4k", "8K", "4K",
+  // Transitional verbs — produce hesitant/weak motion (caught separately but listed for docs)
+  // "begins to", "starts to", "about to" — handled by TRANSITION_PATTERNS below
 ];
 
 const NEGATIVE_PATTERNS = [

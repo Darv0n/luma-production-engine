@@ -20,6 +20,10 @@ export const COLORS = {
   scoreWarn: "#b89c4a",
   scoreError: "#c0564a",
   accent: "rgba(232,228,222,0.06)",
+  // War Room voice colors
+  claude: "#b89c4a",
+  gemini: "#6a8ab8",
+  human: "#5a9a6a",
 };
 
 export const FONTS = {

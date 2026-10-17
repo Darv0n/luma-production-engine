@@ -7,3 +7,10 @@ dist/
 .DS_Store
 .playwright-session/
 data/*.json
+.realms-session/
+
+# generated production run data
+data/war-room/
+
+# reference videos exceed GitHub 100MB limit
+data/reference/*.mp4

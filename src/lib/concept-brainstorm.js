@@ -54,11 +54,17 @@ export function buildConceptSystemPrompt(creativeDirection) {
  * @param {Object} creativeDirection — { vision, mood, energy }
  * @returns {Promise<{ message, refinedConcept, suggestions }>}
  */
-export async function embodyAndPropose(concept, creativeDirection) {
+export async function embodyAndPropose(concept, creativeDirection, projectContext) {
   const systemPrompt = buildConceptSystemPrompt(creativeDirection);
+
+  const projectLines = [];
+  if (projectContext?.format) projectLines.push(`FORMAT: ${projectContext.format}`);
+  if (projectContext?.product) projectLines.push(`PRODUCT: ${projectContext.product} — this piece advertises this product. Integrate it naturally.`);
+  if (projectContext?.targetDuration) projectLines.push(`TARGET DURATION: ${projectContext.targetDuration}`);
 
   const userPrompt = [
     `CONCEPT: "${concept}"`,
+    ...projectLines,
     `MOOD: ${creativeDirection?.mood || 'neutral'}`,
     `ENERGY: ${creativeDirection?.energy || 'building'}`,
     '',
@@ -85,7 +91,7 @@ export async function embodyAndPropose(concept, creativeDirection) {
  * @param {Object} creativeDirection — { vision, mood, energy }
  * @returns {Promise<{ message, refinedConcept, suggestions }>}
  */
-export async function respondToFeedback(turns, feedback, creativeDirection) {
+export async function respondToFeedback(turns, feedback, creativeDirection, projectContext) {
   const systemPrompt = buildConceptSystemPrompt(creativeDirection);
 
   const conversationHistory = turns.map((t) => {
@@ -95,7 +101,13 @@ export async function respondToFeedback(turns, feedback, creativeDirection) {
     return `HUMAN: ${t.message}`;
   }).join('\n\n');
 
+  const projectLines = [];
+  if (projectContext?.format) projectLines.push(`FORMAT: ${projectContext.format}`);
+  if (projectContext?.product) projectLines.push(`PRODUCT: ${projectContext.product}`);
+  if (projectContext?.targetDuration) projectLines.push(`TARGET DURATION: ${projectContext.targetDuration}`);
+
   const userPrompt = [
+    ...projectLines,
     'CONVERSATION SO FAR:',
     conversationHistory,
     '',

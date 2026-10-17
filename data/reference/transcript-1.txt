@@ -1,0 +1,155 @@
+[00:00] Hello and welcome to what we're calling realms for now.
+[00:05] What I'm going to do is give you kind of the basic introduction to the UI.
+[00:12] And then after that, I'm going to go over a few different use cases
+[00:16] just so you get a sense of what's possible inside of the tool.
+[00:21] So you'll notice I have this kind of canvas background.
+[00:26] I have a toolbar at the bottom here that we're going to look at.
+[00:29] And then I have my LLM chat that's over to the right.
+[00:36] So really if I look at, we'll start this toolbar.
+[00:39] And if I look at this toolbar, I can see I can generate images,
+[00:42] I can generate video, I can generate audio.
+[00:47] And if I click on some of these, I can actually see we have a whole bunch of different types of models.
+[00:54] I can see all my video models.
+[00:57] I see there's different ways that I can work with audio.
+[01:00] So we just encourage you to explore these as well as explore that we have these shapes
+[01:06] and can put text on here and anything else that you see down here.
+[01:10] Just look around.
+[01:12] But what we're going to start is looking at, if I click on Nan open Nanopro,
+[01:17] I can see I have this window that pops up and it shows me some of the options
+[01:23] that I have when using the tool.
+[01:25] Like reference, it can change aspect ratio of the size.
+[01:28] And I can enter in a prompt.
+[01:30] So I'm just going to say a coffee mug on a table.
+[01:35] So if I write a prompt in here, this will go ahead and create that image.
+[01:42] And we're going to see that that will work.
+[01:46] But while that's loading, I'm going to go ahead and show you the agent.
+[01:51] So this is really the most powerful part of the tool.
+[01:56] And as was kind of mentioned earlier, you really want to lean on the agent for everything.
+[02:02] It's a collaborator.
+[02:03] It's an assistant and it can help you with any question that you have.
+[02:08] You can use it like an LLM.
+[02:11] But you can also use it to talk to about an asset.
+[02:16] To generate an asset, I could have generated the same image just by telling the agent to do it here.
+[02:23] But I'm going to open up.
+[02:24] You can see if I click up here at the top that I have other chats,
+[02:28] I can open up multiple chats.
+[02:32] We're just going to look at this one for a second.
+[02:34] So you can see.
+[02:36] I said, what image models do you have access to?
+[02:39] And what is the best option for character consistency?
+[02:43] And then I ask it for some tips of like, how do I get good character consistency across multiple outputs?
+[02:51] So it lists some of the models and then it actually tells me that NANO and Banana Pro is the premium choice.
+[02:59] So it's not just that we have the models.
+[03:02] It's that the agent knows how and when to use these models.
+[03:08] As well as can give me tips of how to achieve character consistency across multiple outputs.
+[03:17] So whenever you have a question that comes up or you're not seeing a result that you like,
+[03:23] you can talk to the agent.
+[03:25] And just to kind of finish this off to show you what the agent can actually do.
+[03:31] If I were here and I say generate 12 images of different color coffee moves on the table.
+[03:46] So if I run this, it will actually start to show me 12 different images.
+[03:52] I asked for different colors.
+[03:54] So it is going to figure out how to write those 12 different prompts.
+[03:59] And it will set up this kind of batch.
+[04:01] So you can see all those at once.
+[04:03] I don't have to wire any notes.
+[04:07] This is just a really easy way to have the agent assist you in whatever process you have.
+[04:14] So we'll see here that there will be a variety of different coffee mugs.
+[04:20] And from here, I could even select a few of these and say do something with these three images.
+[04:28] Maybe I don't like these.
+[04:30] I want to change these or place these in a different scene.
+[04:34] So I can just lean on the agent to help me figure out anything.
+[04:40] Okay.
+[04:42] So now that you have a general sense of what the agent is and how the UI works,
+[04:49] we're just going to look over a few different use cases.
+[04:53] So you can just get a sense of what this tool can really do.
+[04:57] So if I zoom out here, I had created this almost as just like a map.
+[05:04] So this board was able to combine different species of animals together.
+[05:12] And once I've had those animals and images, then I could take them, convert them to video,
+[05:18] and then stitch together this video that showed a whole bunch of different types of animals,
+[05:25] hybrids in one video.
+[05:28] And I'm showing you animal hybrids, but I'm sure you can imagine how you could combine anything.
+[05:35] Maybe you're making mythological creatures where you need to combine humans with animals.
+[05:41] Or maybe you're making animal cookies or animal crackers.
+[05:45] So you need to create a line where you take all these animals and combine them with different foods.
+[05:53] So this is just to show you that we can get these combinations, but there's a lot of different things you could combine.
+[06:00] And you'll see a few of those in a minute.
+[06:04] So another example is that I have this board where I took these images of ice cream
+[06:16] and was able to use those as inspiration to design all 16 of these different fashion items.
+[06:25] I'm sure you can imagine how you could use whatever images you wanted, maybe use brand assets.
+[06:32] You could really use anything or maybe you already have products, you don't need to make them.
+[06:39] But you want to see how they look in different product shots.
+[06:43] So here I actually took one of those hats, placed it against a white background, got some different views,
+[06:49] placed it on the model, asked for it to design some custom packaging that would make sense for that product,
+[06:58] and then to take that product and place it on a human in an environment that made sense.
+[07:03] As you can see, she's wearing the ice cream hat and eating ice cream.
+[07:08] And I did that for all 16 of the items here.
+[07:15] And then I was able to get product page designs.
+[07:19] I asked her to come up with some tag lines, color scheme, try out a few different types of fonts.
+[07:26] And so this just gave me a bunch of different looks.
+[07:29] And I could take these and do all types of things.
+[07:33] So really there's a lot you can do with products, either making products, placing those products, getting different images.
+[07:40] There's a lot that you can do in this tool.
+[07:43] And if you have questions about any of these things, can send you this board and describe it in more detail.
+[07:51] So here, what was happening was that I created a bunch of different character assets in four different styles.
+[08:03] So I wanted to see this wizard, this witch, and this superhero in my Gafabric style, in a clay style, in a figurine style,
+[08:13] and then in a photorealistic kind of CGI style.
+[08:18] So I had some good assets to start with.
+[08:22] And then once I had some characters, I decided I wanted to do a claymation thing.
+[08:27] So I chose these five different characters.
+[08:31] And I worked with the agent to help me come up with a little script, a little short story.
+[08:38] And from there, it was able to help me design a bunch of different shots.
+[08:43] So I have these all these assets running vertically from my shots.
+[08:49] I was able to have it create sound for sound effects.
+[08:53] And it helped me create this video where there's a wizard that gets transformed into a cat accidentally.
+[09:02] So the witch tries to help him out.
+[09:05] And as you can see, there's character consistency across multiple shots.
+[09:10] This is the same witch that appeared before.
+[09:13] And then she goes back, tries to help him out and makes the situation even worse.
+[09:22] But all of this, all of the character consistency, the scene consistency,
+[09:28] having the character remain across multiple shots, was able to happen through Vespa.
+[09:34] And the agent was able to help me figure out all those shots, figure out how to get the consistency,
+[09:41] and how to plan it out in step.
+[09:43] So you can really lean on it to help you create a multi shot video.
+[09:50] So this one I'm going to cover in a little bit more detail because it's one of the things
+[09:57] that can lead you with that reminds you to lean on the agent.
+[10:03] So what was happening here is that I decided I wanted to make some ice cream inspired architecture.
+[10:11] My results were pretty boring, as you can see.
+[10:15] But if this was in some other program, I might have to think about how I'm going to rewrite a prompt really technically.
+[10:22] I don't have to do that here.
+[10:25] I can just talk to the agent and say things like these do not look like ice cream.
+[10:31] If there's no scoop ice cream, no fudge, and I'm just telling it what I don't like in simple language,
+[10:38] and it telling it to be more creative and imaginative, and then it will iterate with me.
+[10:44] And then from here, I said, okay, I don't want the white background.
+[10:48] And what the whole building to be edible and more realistic, I'm not changing the prompt again,
+[10:54] just simply telling it these things and my outputs start to improve.
+[11:01] So I'm seeing better results. I'm just saying keep going in that direction.
+[11:05] Push this even further. I'm seeing some materials in here that aren't edible.
+[11:11] So make sure to adjust that.
+[11:14] And then I'm telling it to try different models.
+[11:17] And my results improve.
+[11:20] So through just speaking in simple language, the way you would just describe this to someone else,
+[11:25] you can talk to the agent and it will figure out all the specific prompting or whatever it has to do to get the result that you want.
+[11:33] And as you can see by the end, I'm getting these buildings that aren't available.
+[11:39] And as you can see by the end, I'm getting these buildings that are made out of ice cream and chocolate.
+[11:48] And so I'm seeing the results that I like or that I was hoping for.
+[11:53] And so I asked it to create a summary of this process.
+[11:57] Like I really like this.
+[11:59] We went through this thing. I might want to use it again.
+[12:01] So summarize what just happened in this process.
+[12:06] It created a template.
+[12:08] And from that, I was able to reuse that so that I could now get edible vehicles.
+[12:19] So this was really just to point out that you can lean on the agent to get better results.
+[12:25] You can just use simple language.
+[12:28] If you get results you like, you can ask it to like summarize that and place it in a document.
+[12:33] You can reuse that somewhere else.
+[12:36] It's really easy to iterate and improve your results.
+[12:40] And the very last thing I'm going to go over is that we have the ability to do motion graphics.
+[12:47] So in any of those videos that you saw, I could have added text overlay, animating a logo on top of the screen.
+[12:54] Any of those things. So I actually just took this logo and asked it to come up with some motion graphics and a tagline that it thought would make sense with this logo.
+[13:05] And I can see some different looks.
+[13:08] And once again, I could have placed these on top of the videos.
+[13:12] You can just ask it to make animations provided with the assets that you want to animate, provided with the text.
+[13:19] And there's really a lot that you can do.
+[13:22] Okay, so the hope is that when you get back to a screen where you are looking at a new agent that you just realize that any of your ideas, anything you can do, you lean on the agent, ask it all of your questions, tell it what you like, tell it what you don't like.
+[13:44] You can just lean on the agent. It will help you with anything that comes up.
+[13:49] Alright, thanks guys.

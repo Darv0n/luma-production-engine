@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { S, COLORS } from "../styles/theme.js";
 
 // ─── Inline style helpers ─────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export default function ProjectSidebar({
   onRemoveCharacter,
   onUpdateCharacter,
 }) {
+  const navigate = useNavigate();
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [deletingId, setDeletingId] = useState(null);
@@ -214,6 +216,49 @@ export default function ProjectSidebar({
           );
         })}
       </div>
+
+      {/* War Room + Produce links — only shown when a project is active */}
+      {activeProject && (
+        <div style={{
+          borderTop: `1px solid ${COLORS.border}`,
+          padding: "10px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+        }}>
+          <div style={{ ...S.label, fontSize: "8px", letterSpacing: "2px", marginBottom: "4px" }}>
+            ACTIONS
+          </div>
+          <button
+            onClick={() => navigate(`/projects/${activeProject.id}/war-room`)}
+            style={{
+              ...S.btnSec,
+              width: "100%",
+              fontSize: "8px",
+              letterSpacing: "1.5px",
+              padding: "6px 10px",
+              textAlign: "left",
+              color: "#b89c4a",
+              borderColor: "rgba(184,156,74,0.2)",
+            }}
+          >
+            WAR ROOM
+          </button>
+          <button
+            onClick={() => navigate(`/projects/${activeProject.id}/produce`)}
+            style={{
+              ...S.btnSec,
+              width: "100%",
+              fontSize: "8px",
+              letterSpacing: "1.5px",
+              padding: "6px 10px",
+              textAlign: "left",
+            }}
+          >
+            PRODUCE
+          </button>
+        </div>
+      )}
 
       {/* Characters section — only shown when a project is active */}
       {activeProject && (

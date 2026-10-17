@@ -27,7 +27,7 @@ import {
   openPlatformLogin,
 } from '../lib/luma-client.js';
 
-export default function ConceptBrainstorm({ concept, settings, onUpdateSettings, onAcceptConcept }) {
+export default function ConceptBrainstorm({ concept, settings, onUpdateSettings, onAcceptConcept, projectContext }) {
   const [active, setActive] = useState(false);
   const [turns, setTurns] = useState([]);
   const [phase, setPhase] = useState('idle');
@@ -70,7 +70,7 @@ export default function ConceptBrainstorm({ concept, settings, onUpdateSettings,
   const runProposal = async () => {
     setPhase('proposing');
     try {
-      const result = await embodyAndPropose(concept, creativeDirection);
+      const result = await embodyAndPropose(concept, creativeDirection, projectContext);
       const turn = createDialogueTurn({
         role: 'auteur',
         type: 'proposal',
@@ -221,7 +221,7 @@ export default function ConceptBrainstorm({ concept, settings, onUpdateSettings,
     setPhase('proposing');
     try {
       const result = await respondToFeedback(
-        [...turns, humanTurn], text, creativeDirection
+        [...turns, humanTurn], text, creativeDirection, projectContext
       );
       const turn = createDialogueTurn({
         role: 'auteur',
@@ -244,8 +244,12 @@ export default function ConceptBrainstorm({ concept, settings, onUpdateSettings,
 
   // ─── Accept ────────────────────────────────────────────────────────────────
 
+  const [accepted, setAccepted] = useState(false);
+
   const handleAccept = (text) => {
     onAcceptConcept(text);
+    setAccepted(true);
+    setTimeout(() => setActive(false), 600);
   };
 
   // ─── Apply suggestion chip ─────────────────────────────────────────────────
@@ -498,16 +502,18 @@ export default function ConceptBrainstorm({ concept, settings, onUpdateSettings,
               <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                 <button
                   onClick={() => handleAccept(turn.prompt)}
+                  disabled={accepted}
                   style={{
                     ...S.btnSec,
                     fontSize: '9px',
                     padding: '5px 16px',
                     letterSpacing: '1px',
-                    color: '#5a9a6a',
-                    borderColor: 'rgba(90,154,106,0.3)',
+                    color: accepted ? '#5a9a6a' : '#5a9a6a',
+                    borderColor: accepted ? 'rgba(90,154,106,0.5)' : 'rgba(90,154,106,0.3)',
+                    background: accepted ? 'rgba(90,154,106,0.12)' : undefined,
                   }}
                 >
-                  ACCEPT
+                  {accepted ? 'ACCEPTED' : 'ACCEPT'}
                 </button>
                 <button
                   onClick={runProposal}

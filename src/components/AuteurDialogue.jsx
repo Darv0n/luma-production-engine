@@ -31,6 +31,7 @@ export default function AuteurDialogue({
   onUpdateShot,
   onDialogueUpdate,
   onGenerateKeyframe,
+  projectContext,
 }) {
   const [loading, setLoading] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -65,7 +66,7 @@ export default function AuteurDialogue({
     setLoading(true);
     try {
       const result = await generateInitialProposal(
-        shot, arcData, concept, creativeDirection, approvedShots, callAPI
+        shot, arcData, concept, creativeDirection, approvedShots, callAPI, projectContext
       );
       addTurn(createDialogueTurn({
         role: 'auteur',
@@ -99,7 +100,7 @@ export default function AuteurDialogue({
     try {
       const currentDialogue = { ...dialogue, turns: [...dialogue.turns, createDialogueTurn({ role: 'human', type: 'feedback', message: text })] };
       const result = await respondToFeedback(
-        currentDialogue, text, arcData, concept, creativeDirection, approvedShots, callAPI
+        currentDialogue, text, arcData, concept, creativeDirection, approvedShots, callAPI, projectContext
       );
       addTurn(createDialogueTurn({
         role: 'auteur',
@@ -123,7 +124,7 @@ export default function AuteurDialogue({
     setLoading(true);
     try {
       const result = await requestAlternatives(
-        dialogue, arcData, concept, creativeDirection, approvedShots, callAPI
+        dialogue, arcData, concept, creativeDirection, approvedShots, callAPI, projectContext
       );
       addTurn(createDialogueTurn({
         role: 'auteur',

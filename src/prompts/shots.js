@@ -38,9 +38,23 @@ ABSOLUTE RULES — violating any of these produces unusable output:
 
 8. SHOT TYPE is the highest-leverage word. Always include it first.
 
-9. CAMERA MOTION — specify 1-2 max. "Static" / "camera holds steady" is powerful when composition is strong.
+9. CAMERA MOTION — specify 1-2 max from this list (use exact terms for best accuracy):
+   Static | Pan Left/Right | Tilt Up/Down | Push In | Pull Out | Orbit Left/Right
+   Crane Up/Down | Truck Left/Right | Zoom In/Out | Bolt Cam | Aerial Drone
+   Pedestal Up/Down | Roll Left/Right | Elevator | Tiny Planet
+   Also valid: "dolly zoom" "steadicam tracking" "handheld sway" "FPV drone" "rack focus"
+   "Static" is the most powerful choice when the composition is strong enough.
 
 10. LIGHTING must be specific: "golden hour backlight" not just "good lighting".
+
+11. EQUIPMENT PRIMES — optional final word, appended after mood. Match to concept tone:
+    Portrait/character warmth:  "Kodak Portra 400, 85mm portrait lens"
+    Cinema narrative:           "Shot on ARRI Alexa, 50mm lens"
+    Documentary/raw truth:      "35mm handheld, Kodak Vision3 250D"
+    Nostalgic/indie:            "16mm film grain, Kodak Vision3 500T"
+    Night/urban:                "anamorphic bokeh, practical lights"
+    Product detail:             "macro lens, soft studio light"
+    These push the model toward professional footage quality. Only use if it serves the concept.
 
 Return ONLY valid JSON array.`;
 
@@ -98,7 +112,9 @@ Return JSON array:
   "fallback": "specific mitigation strategy",
   "cutType": "cut type to NEXT shot with rationale",
   "postNotes": "color grade, compositing, text overlay notes",
-  "change": "what CHANGES in this shot (the hierarchy: revelation > emotion > action > movement > texture)"
+  "change": "what CHANGES in this shot (the hierarchy: revelation > emotion > action > movement > texture)",
+  "equipmentPrime": "e.g. 'Kodak Portra 400, 85mm portrait lens' or null if not needed",
+  "subtitle": "for LUMA TRANSLATE / text-on-screen concepts: the exact text to burn in, or null"
 }]`;
 }
 
@@ -146,5 +162,7 @@ export function normalizeShots(shots, defaultModel, suggestedAspect) {
     autoExtend: s.autoExtend || false,               // chain to next shot via last_frame
     auteurMode: s.auteurMode || "none",              // "none" | "user" | "ai" (future)
     keyframeId: s.keyframeId || null,               // references project.keyframes[].id
+    equipmentPrime: s.equipmentPrime || null,       // Kodak Portra 400, ARRI Alexa, etc.
+    subtitle: s.subtitle || null,                   // text to burn in (for LUMA TRANSLATE etc.)
   }));
 }
