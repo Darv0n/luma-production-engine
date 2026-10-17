@@ -17,9 +17,9 @@ const ROW = { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wra
 
 const FIELD_LABEL = {
   ...S.mono,
-  fontSize: "8px",
+  fontSize: "10px",
   letterSpacing: "1.5px",
-  color: "rgba(232,228,222,0.35)",
+  color: "rgba(232,228,222,0.45)",
   minWidth: "90px",
 };
 
@@ -36,11 +36,11 @@ function Toggle({ value, onChange, label }) {
       onClick={() => onChange(!value)}
       style={{
         ...S.btnSec,
-        fontSize: "8px",
-        padding: "3px 10px",
+        fontSize: "9px",
+        padding: "4px 12px",
         letterSpacing: "1px",
-        color: value ? "#5a9a6a" : "rgba(232,228,222,0.3)",
-        borderColor: value ? "rgba(90,154,106,0.3)" : "rgba(232,228,222,0.08)",
+        color: value ? "#5a9a6a" : "rgba(232,228,222,0.4)",
+        borderColor: value ? "rgba(90,154,106,0.3)" : "rgba(232,228,222,0.12)",
         background: value ? "rgba(90,154,106,0.06)" : "transparent",
       }}
     >
@@ -81,7 +81,7 @@ export default function ShotSetup({ shot, onUpdate, isOpen, onToggle, projectDef
         gap: "10px",
       }}
     >
-      <div style={{ ...S.mono, fontSize: "8px", letterSpacing: "2px", color: "rgba(232,228,222,0.25)", marginBottom: "2px" }}>
+      <div style={{ ...S.mono, fontSize: "10px", letterSpacing: "2px", color: "rgba(232,228,222,0.35)", marginBottom: "2px" }}>
         SHOT SETUP
       </div>
 
@@ -186,7 +186,7 @@ export default function ShotSetup({ shot, onUpdate, isOpen, onToggle, projectDef
 
       {/* Post-chain */}
       <div style={{ borderTop: "1px solid rgba(232,228,222,0.05)", paddingTop: "8px" }}>
-        <div style={{ ...S.mono, fontSize: "8px", letterSpacing: "1.5px", color: "rgba(232,228,222,0.2)", marginBottom: "6px" }}>
+        <div style={{ ...S.mono, fontSize: "10px", letterSpacing: "1.5px", color: "rgba(232,228,222,0.35)", marginBottom: "6px" }}>
           POST-CHAIN — runs after final render
         </div>
         <div style={ROW}>

@@ -39,7 +39,7 @@ export async function runPipeline(
   product,
   targetDuration,
   onStage,
-  { characters = [] } = {}
+  { characters = [], creativeDirection = null } = {}
 ) {
   // ─── STAGE 1: SCAN + TENSION ──────────────────────────────────────
   await onStage("scan", null);
@@ -66,7 +66,7 @@ export async function runPipeline(
   const defaultModel = analysis.needsCharacterRef ? "Ray3" : "Ray3.14";
   const rawShots = await callAPI(
     SHOTS_SYSTEM,
-    buildShotsUser(concept, format, product, analysis, arcData, characters)
+    buildShotsUser(concept, format, product, analysis, arcData, characters, creativeDirection)
   );
   let shotsArray = normalizeShots(
     rawShots,

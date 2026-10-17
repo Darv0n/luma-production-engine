@@ -10,6 +10,20 @@ import { createProject, createRun, latestRun, createDefaultSettings } from "../s
 import PipelineProgress from "../components/PipelineProgress.jsx";
 import LiveResults from "../components/LiveResults.jsx";
 import SchemaOutput from "../components/SchemaOutput.jsx";
+import CreativeDirection from "../components/CreativeDirection.jsx";
+import ConceptBrainstorm from "../components/ConceptBrainstorm.jsx";
+
+function buildCreativeDirection(settings) {
+  if (!settings) return null;
+  const { mood, energy, vision } = settings;
+  const isDefault = mood === 'neutral' && energy === 'building' && !vision;
+  if (isDefault) return null;
+  return {
+    mood: mood || 'neutral',
+    energy: energy || 'building',
+    vision: vision || '',
+  };
+}
 
 export default function ProjectWorkspace() {
   const { id } = useParams();
@@ -138,7 +152,10 @@ export default function ProjectWorkspace() {
             setPipelineStage("shots");
           }
         },
-        { characters }
+        {
+          characters,
+          creativeDirection: buildCreativeDirection(projectSettings),
+        }
       );
 
       setFinalResult(result);
@@ -352,6 +369,14 @@ export default function ProjectWorkspace() {
         </div>
       )}
 
+      {/* Creative Direction — pre-pipeline, always visible before run */}
+      {!finalResult && (
+        <CreativeDirection
+          settings={projectSettings}
+          onUpdate={handleUpdateSettings}
+        />
+      )}
+
       {/* Input form */}
       {!finalResult && (
         <div style={{ ...S.card, marginBottom: "24px", animation: "fadeIn 0.3s ease" }}>
@@ -374,6 +399,16 @@ export default function ProjectWorkspace() {
               color: "#e8e4de",
             }}
           />
+
+          {/* Concept Brainstorm — directly after textarea, before format grid */}
+          {concept.trim() && (
+            <ConceptBrainstorm
+              concept={concept}
+              settings={projectSettings}
+              onUpdateSettings={handleUpdateSettings}
+              onAcceptConcept={(text) => setConcept(text)}
+            />
+          )}
 
           <div
             style={{

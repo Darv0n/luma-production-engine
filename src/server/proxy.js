@@ -249,6 +249,21 @@ export function createStorageMiddleware() {
         return;
       }
 
+      // PATCH /api/storage/dialogues/:projectId/:runId → update dialogue state
+      const dialogueMatch = req.url.match(/^\/dialogues\/([^/]+)\/([^/]+)$/);
+      if (dialogueMatch && req.method === 'PATCH') {
+        readBody((dialogues) => {
+          const project = getProject(dialogueMatch[1]);
+          if (!project) return json(404, { error: 'Project not found' });
+          if (!project.dialogues) project.dialogues = {};
+          project.dialogues[dialogueMatch[2]] = dialogues;
+          project.updatedAt = new Date().toISOString();
+          saveProject(project);
+          json(200, { ok: true });
+        });
+        return;
+      }
+
       // POST /api/storage/import → bulk import (localStorage migration)
       if (req.url === '/import' && req.method === 'POST') {
         readBody((projectMap) => {
@@ -268,6 +283,15 @@ export function createPlatformMiddleware() {
     const json = (status, body) => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
+    };
+
+    const readBody = (cb) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        try { cb(JSON.parse(body)); }
+        catch { json(400, { error: 'Invalid JSON' }); }
+      });
     };
 
     // GET /api/platform/session
@@ -331,6 +355,20 @@ export function createPlatformMiddleware() {
         try {
           const { openLoginBrowser } = await import('./luma-platform.js');
           const result = await openLoginBrowser();
+          json(200, result);
+        } catch (e) {
+          json(500, { error: e.message });
+        }
+      })();
+      return;
+    }
+
+    // GET /api/platform/screenshot
+    if (req.url === '/screenshot' && req.method === 'GET') {
+      (async () => {
+        try {
+          const { captureScreenshot } = await import('./luma-platform.js');
+          const result = await captureScreenshot();
           json(200, result);
         } catch (e) {
           json(500, { error: e.message });
