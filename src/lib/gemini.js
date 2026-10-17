@@ -356,14 +356,34 @@ export async function generateKeyframe(imagePrompt, apiKey, options = {}) {
   const model = options.model || IMAGE_MODEL;
   const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
 
+  // The Nano Banana models ignore aspectRatio in generationConfig — orientation
+  // must be enforced through the text prompt. Append a hard instruction.
+  const aspectRatio = options.aspectRatio || '9:16'; // default portrait
+  const orientationInstruction = aspectRatio === '9:16'
+    ? ' Portrait orientation, 9:16 vertical format, taller than wide.'
+    : aspectRatio === '16:9'
+    ? ' Landscape orientation, 16:9 horizontal format, wider than tall.'
+    : '';
+
+  // Default aesthetic prime for character/portrait keyframes (Wonder Years / Luma production standard)
+  // Baked from LUMA1 photorealism lexicon: Kodak Portra 400 = portrait warmth + skin tones,
+  // 85mm = compressed perspective + beautiful faces, both confirmed quality drivers.
+  // Only append if not already present and not explicitly disabled.
+  const aestheticPrime = options.aestheticPrime !== false && !imagePrompt.toLowerCase().includes('kodak') && !imagePrompt.toLowerCase().includes('35mm') && !imagePrompt.toLowerCase().includes('arri')
+    ? ' Kodak Portra 400, 85mm portrait lens.'
+    : '';
+
+  const finalPrompt = imagePrompt + orientationInstruction + aestheticPrime;
+
   const body = {
     contents: [{
       role: 'user',
-      parts: [{ text: imagePrompt }],
+      parts: [{ text: finalPrompt }],
     }],
     generationConfig: {
+      // Image generation models only accept responseModalities — aspect ratio
+      // is controlled entirely through the text prompt (API fields rejected with 400)
       responseModalities: ['IMAGE', 'TEXT'],
-      ...(options.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
     },
   };
 

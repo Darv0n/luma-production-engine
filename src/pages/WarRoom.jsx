@@ -28,6 +28,9 @@ import {
   abortWarRoom,
   traverseWithGemini,
   runProduction,
+  startCoPilot,
+  stopCoPilot,
+  promptAssist,
 } from '../lib/war-room-client.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -54,6 +57,11 @@ export default function WarRoom() {
   const [started, setStarted] = useState(false);
   const [assetFilter, setAssetFilter] = useState('all');
   const [expandedAsset, setExpandedAsset] = useState(null);
+  const [warRoomMode, setWarRoomMode] = useState('autopilot'); // 'autopilot' | 'copilot'
+  const [assistInput, setAssistInput] = useState('');
+  const [selectedAsset, setSelectedAsset] = useState(null);   // asset id for curation
+  const [registeringChar, setRegisteringChar] = useState(null); // asset id being named
+  const [charNameInput, setCharNameInput] = useState('');
 
   // Refs
   const dialogueEndRef = useRef(null);
@@ -66,6 +74,42 @@ export default function WarRoom() {
     if (!projectId) return;
     storage.getProject(projectId).then(p => setProject(p));
   }, [projectId]);
+
+  // On mount: probe for an existing active session and auto-reconnect if found.
+  // This lets the user navigate freely between the project workspace and War Room
+  // without losing the session — no pre-start screen on return.
+  useEffect(() => {
+    if (!projectId || started) return;
+
+    const probe = new EventSource(`/api/war-room/status?projectId=${projectId}`);
+    let resolved = false;
+
+    probe.addEventListener('state', (e) => {
+      if (resolved) return;
+      resolved = true;
+      probe.close();
+      try {
+        const state = JSON.parse(e.data);
+        if (state && state.projectId) {
+          // Active session found — skip pre-start screen
+          setStarted(true);
+        }
+      } catch { /* no session */ }
+    });
+
+    // If no state event in 2s, no active session — leave pre-start screen
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        probe.close();
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(timeout);
+      if (!resolved) probe.close();
+    };
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // SSE: War Room events
   useEffect(() => {
@@ -105,8 +149,9 @@ export default function WarRoom() {
     canvasSSERef.current = es;
 
     es.addEventListener('frame', (e) => {
-      const { imageBase64 } = JSON.parse(e.data);
-      setCanvasImage(imageBase64);
+      const { imageBase64, mimeType } = JSON.parse(e.data);
+      // Store as data URI with correct MIME type (jpeg or png)
+      setCanvasImage(`data:${mimeType || 'image/png'};base64,${imageBase64}`);
     });
 
     return () => es.close();
@@ -157,6 +202,50 @@ export default function WarRoom() {
     await pushToPlatform(projectId, assetId);
   }, [projectId]);
 
+  const handleCopyAsset = useCallback(async (asset) => {
+    if (!asset?.imageBase64) return;
+    try {
+      // Determine MIME type from the asset or default to PNG
+      const mime = asset.mimeType || 'image/png';
+      const dataUrl = `data:${mime};base64,${asset.imageBase64}`;
+      // Use Clipboard API to write image
+      const resp = await fetch(dataUrl);
+      const blob = await resp.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+    } catch {
+      // Fallback: copy as data URL string so user can paste elsewhere
+      const mime = asset.mimeType || 'image/png';
+      await navigator.clipboard.writeText(`data:${mime};base64,${asset.imageBase64}`);
+    }
+  }, []);
+
+  const handleRegisterCharacter = useCallback(async (asset, name) => {
+    if (!asset?.imageBase64 || !name?.trim() || !project) return;
+    const mime = asset.mimeType || 'image/png';
+    const ext = mime.split('/')[1] || 'png';
+    // Save via storage API directly
+    const p = await import('../store/storage.js').then(m => m.storage.getProject(projectId));
+    if (!p) return;
+    const existing = (p.characters || []).some(c => c.name === name.trim());
+    if (!existing) {
+      await import('../store/storage.js').then(m => m.storage.saveProject({
+        ...p,
+        characters: [
+          ...(p.characters || []),
+          { name: name.trim(), description: asset.prompt || '', imageBase64: asset.imageBase64, imageExt: ext },
+        ],
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+    setRegisteringChar(null);
+    setCharNameInput('');
+    setSelectedAsset(null);
+    // Refresh project
+    import('../store/storage.js').then(m => m.storage.getProject(projectId)).then(setProject);
+  }, [project, projectId]);
+
   const handleScout = useCallback(async () => {
     const goal = input.trim() || 'Survey the board. Evaluate what has been generated against the creative vision. Report model choices, prompt quality, and any deviations from the arc.';
     setInput('');
@@ -183,6 +272,21 @@ export default function WarRoom() {
     }));
     await runProduction(projectId, shots);
   }, [project, projectId]);
+
+  const handleStartCoPilot = useCallback(async () => {
+    await startCoPilot(projectId, sessionState?.boardId);
+  }, [projectId, sessionState?.boardId]);
+
+  const handleStopCoPilot = useCallback(async () => {
+    await stopCoPilot(projectId);
+  }, [projectId]);
+
+  const handlePromptAssist = useCallback(async () => {
+    const direction = assistInput.trim() || input.trim();
+    if (!direction) return;
+    setAssistInput('');
+    await promptAssist(projectId, direction);
+  }, [assistInput, input, projectId]);
 
   const handlePause = () => pauseWarRoom(projectId);
   const handleResume = () => resumeWarRoom(projectId);
@@ -297,6 +401,53 @@ export default function WarRoom() {
           }}>
             {project?.name || projectId}
           </span>
+          {/* Mode toggle */}
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: '3px',
+            padding: '2px',
+          }}>
+            {['autopilot', 'copilot'].map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  setWarRoomMode(m);
+                  if (m === 'copilot' && sessionState?.platformConnected) handleStartCoPilot();
+                  if (m === 'autopilot') handleStopCoPilot();
+                }}
+                style={{
+                  ...S.btnSec,
+                  fontSize: '7px',
+                  padding: '3px 8px',
+                  letterSpacing: '1.5px',
+                  border: 'none',
+                  background: warRoomMode === m ? 'rgba(232,228,222,0.1)' : 'transparent',
+                  color: warRoomMode === m
+                    ? (m === 'copilot' ? COLORS.gemini : COLORS.claude)
+                    : COLORS.textDim,
+                }}
+              >
+                {m === 'autopilot' ? 'AUTO' : 'CO-PILOT'}
+              </button>
+            ))}
+          </div>
+          {/* WATCHING badge */}
+          {sessionState?.coPilotActive && (
+            <span style={{
+              fontFamily: FONTS.mono,
+              fontSize: '7px',
+              letterSpacing: '1.5px',
+              color: COLORS.gemini,
+              padding: '2px 7px',
+              border: `1px solid ${COLORS.gemini}44`,
+              borderRadius: '3px',
+              animation: 'pulse 2s infinite',
+            }}>
+              WATCHING
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           {!sessionState?.platformConnected && (
@@ -478,7 +629,7 @@ export default function WarRoom() {
           }}>
             {canvasImage ? (
               <img
-                src={`data:image/png;base64,${canvasImage}`}
+                src={canvasImage}
                 alt="Platform canvas"
                 style={{
                   maxWidth: '100%',
@@ -504,119 +655,283 @@ export default function WarRoom() {
           </div>
         </div>
 
-        {/* ASSETS PANEL (15%) */}
+        {/* ASSETS / ASSIST PANEL (15%) */}
         <div style={{
           flex: '0 0 15%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
-          <div style={{
-            padding: '10px 12px',
-            borderBottom: `1px solid ${COLORS.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <span style={{
-              fontFamily: FONTS.mono,
-              fontSize: '8px',
-              letterSpacing: '2px',
-              color: COLORS.textDim,
-            }}>
-              ASSETS ({assets.length})
-            </span>
-          </div>
-
-          {/* Filter tabs */}
-          <div style={{
-            display: 'flex',
-            padding: '6px 8px',
-            gap: '4px',
-            borderBottom: `1px solid ${COLORS.border}`,
-          }}>
-            {['all', 'screenshot', 'keyframe', 'video'].map(f => (
-              <button
-                key={f}
-                onClick={() => setAssetFilter(f)}
-                style={{
-                  fontFamily: FONTS.mono,
-                  fontSize: '7px',
-                  letterSpacing: '1px',
-                  padding: '2px 5px',
-                  border: 'none',
-                  background: assetFilter === f ? 'rgba(232,228,222,0.08)' : 'transparent',
-                  color: assetFilter === f ? COLORS.textMid : COLORS.textDim,
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                }}
-              >
-                {f.toUpperCase()}
-              </button>
-            ))}
-          </div>
-
-          {/* Asset grid */}
-          <div style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '8px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-          }}>
-            {filteredAssets.length === 0 && (
+          {warRoomMode === 'copilot' ? (
+            /* ── CO-PILOT ASSIST PANEL ── */
+            <>
               <div style={{
-                fontFamily: FONTS.mono,
-                fontSize: '8px',
-                color: COLORS.textDim,
-                textAlign: 'center',
-                marginTop: '20px',
+                padding: '10px 12px',
+                borderBottom: `1px solid ${COLORS.border}`,
               }}>
-                No assets yet
-              </div>
-            )}
-            {filteredAssets.map(asset => (
-              <div
-                key={asset.id}
-                onClick={() => setExpandedAsset(
-                  expandedAsset === asset.id ? null : asset.id
-                )}
-                style={{
-                  cursor: 'pointer',
-                  borderRadius: '3px',
-                  overflow: 'hidden',
-                  border: `1px solid ${COLORS.border}`,
-                  transition: 'border-color 0.15s',
-                }}
-              >
-                {asset.imageBase64 && (
-                  <img
-                    src={`data:image/png;base64,${asset.imageBase64}`}
-                    alt={asset.type}
-                    style={{
-                      width: '100%',
-                      height: expandedAsset === asset.id ? 'auto' : '60px',
-                      objectFit: expandedAsset === asset.id ? 'contain' : 'cover',
-                    }}
-                  />
-                )}
-                <div style={{
-                  padding: '4px 6px',
-                  background: 'rgba(255,255,255,0.02)',
+                <span style={{
+                  fontFamily: FONTS.mono,
+                  fontSize: '8px',
+                  letterSpacing: '2px',
+                  color: COLORS.gemini,
                 }}>
+                  ASSIST
+                </span>
+              </div>
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '12px 10px',
+                gap: '8px',
+                overflow: 'auto',
+              }}>
+                <div style={{
+                  fontFamily: FONTS.mono,
+                  fontSize: '8px',
+                  color: COLORS.textDim,
+                  lineHeight: '1.6',
+                }}>
+                  Type a rough idea — get a production-ready Luma prompt back
+                </div>
+                <textarea
+                  value={assistInput}
+                  onChange={(e) => setAssistInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handlePromptAssist();
+                    }
+                  }}
+                  placeholder="Rough direction..."
+                  rows={4}
+                  style={{
+                    ...S.input,
+                    fontSize: '10px',
+                    padding: '8px',
+                    resize: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <button
+                  onClick={handlePromptAssist}
+                  style={{
+                    ...S.btnSec,
+                    fontSize: '7px',
+                    padding: '5px 10px',
+                    letterSpacing: '1.5px',
+                    color: COLORS.claude,
+                    borderColor: `${COLORS.claude}44`,
+                    width: '100%',
+                  }}
+                >
+                  POLISH
+                </button>
+              </div>
+            </>
+          ) : (
+            /* ── AUTOPILOT: ASSETS PANEL ── */
+            <>
+              <div style={{
+                padding: '10px 12px',
+                borderBottom: `1px solid ${COLORS.border}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <span style={{
+                  fontFamily: FONTS.mono,
+                  fontSize: '8px',
+                  letterSpacing: '2px',
+                  color: COLORS.textDim,
+                }}>
+                  ASSETS ({assets.length})
+                </span>
+              </div>
+
+              {/* Filter tabs */}
+              <div style={{
+                display: 'flex',
+                padding: '6px 8px',
+                gap: '4px',
+                borderBottom: `1px solid ${COLORS.border}`,
+              }}>
+                {['all', 'screenshot', 'keyframe', 'video'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setAssetFilter(f)}
+                    style={{
+                      fontFamily: FONTS.mono,
+                      fontSize: '7px',
+                      letterSpacing: '1px',
+                      padding: '2px 5px',
+                      border: 'none',
+                      background: assetFilter === f ? 'rgba(232,228,222,0.08)' : 'transparent',
+                      color: assetFilter === f ? COLORS.textMid : COLORS.textDim,
+                      cursor: 'pointer',
+                      borderRadius: '2px',
+                    }}
+                  >
+                    {f.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Asset grid */}
+              <div style={{
+                flex: 1,
+                overflow: 'auto',
+                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}>
+                {filteredAssets.length === 0 && (
                   <div style={{
                     fontFamily: FONTS.mono,
-                    fontSize: '7px',
-                    letterSpacing: '1px',
+                    fontSize: '8px',
                     color: COLORS.textDim,
+                    textAlign: 'center',
+                    marginTop: '20px',
                   }}>
-                    {asset.type.toUpperCase()} / {asset.source}
+                    No assets yet
                   </div>
-                </div>
+                )}
+                {filteredAssets.map(asset => {
+                  const isSelected = selectedAsset === asset.id;
+                  const isRegistering = registeringChar === asset.id;
+                  const mime = asset.mimeType || 'image/png';
+                  return (
+                    <div
+                      key={asset.id}
+                      style={{
+                        borderRadius: '3px',
+                        overflow: 'hidden',
+                        border: isSelected
+                          ? `1px solid ${COLORS.claude}`
+                          : `1px solid ${COLORS.border}`,
+                        transition: 'border-color 0.15s',
+                        position: 'relative',
+                      }}
+                    >
+                      {/* Image — click to select, double-click to expand */}
+                      {asset.imageBase64 && (
+                        <img
+                          src={`data:${mime};base64,${asset.imageBase64}`}
+                          alt={asset.type}
+                          draggable={true}
+                          onClick={() => setSelectedAsset(isSelected ? null : asset.id)}
+                          onDoubleClick={() => setExpandedAsset(
+                            expandedAsset === asset.id ? null : asset.id
+                          )}
+                          style={{
+                            width: '100%',
+                            height: expandedAsset === asset.id ? 'auto' : '72px',
+                            objectFit: expandedAsset === asset.id ? 'contain' : 'cover',
+                            cursor: 'pointer',
+                            display: 'block',
+                          }}
+                        />
+                      )}
+
+                      {/* Selected state — action bar */}
+                      {isSelected && !isRegistering && (
+                        <div style={{
+                          display: 'flex',
+                          gap: '3px',
+                          padding: '4px 5px',
+                          background: 'rgba(184,156,74,0.08)',
+                          borderTop: `1px solid ${COLORS.claude}33`,
+                        }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCopyAsset(asset); }}
+                            style={{
+                              ...S.btnSec, fontSize: '7px', padding: '2px 5px',
+                              flex: 1, letterSpacing: '1px',
+                              color: COLORS.textMid, borderColor: COLORS.border,
+                            }}
+                            title="Copy image to clipboard"
+                          >
+                            COPY
+                          </button>
+                          {asset.type === 'keyframe' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setRegisteringChar(asset.id); setCharNameInput(''); }}
+                              style={{
+                                ...S.btnSec, fontSize: '7px', padding: '2px 5px',
+                                flex: 2, letterSpacing: '1px',
+                                color: COLORS.claude, borderColor: `${COLORS.claude}44`,
+                              }}
+                              title="Register as character face reference"
+                            >
+                              + CHARACTER
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Register character inline form */}
+                      {isRegistering && (
+                        <div
+                          style={{ padding: '6px', background: 'rgba(184,156,74,0.06)' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            autoFocus
+                            value={charNameInput}
+                            onChange={(e) => setCharNameInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRegisterCharacter(asset, charNameInput);
+                              if (e.key === 'Escape') { setRegisteringChar(null); setCharNameInput(''); }
+                            }}
+                            placeholder="character name..."
+                            style={{
+                              ...S.input, fontSize: '9px', padding: '4px 6px',
+                              width: '100%', boxSizing: 'border-box', marginBottom: '4px',
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '3px' }}>
+                            <button
+                              onClick={() => handleRegisterCharacter(asset, charNameInput)}
+                              disabled={!charNameInput.trim()}
+                              style={{
+                                ...S.btnSec, fontSize: '7px', padding: '2px 5px', flex: 2,
+                                color: COLORS.claude, borderColor: `${COLORS.claude}44`,
+                              }}
+                            >
+                              LOCK FACE
+                            </button>
+                            <button
+                              onClick={() => { setRegisteringChar(null); setCharNameInput(''); }}
+                              style={{ ...S.btnSec, fontSize: '7px', padding: '2px 5px', flex: 1 }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Label when not selected */}
+                      {!isSelected && !isRegistering && (
+                        <div
+                          style={{ padding: '3px 6px', background: 'rgba(255,255,255,0.02)', cursor: 'pointer' }}
+                          onClick={() => setSelectedAsset(asset.id)}
+                        >
+                          <div style={{
+                            fontFamily: FONTS.mono, fontSize: '7px',
+                            letterSpacing: '1px', color: COLORS.textDim,
+                          }}>
+                            {asset.type.toUpperCase()} / {asset.source}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>

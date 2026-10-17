@@ -995,6 +995,48 @@ export function createWarRoomMiddleware(anthropicKey, geminiKey) {
       return;
     }
 
+    // POST /api/war-room/copilot-start
+    if (req.url === '/copilot-start' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.startCoPilot(payload.boardId);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/copilot-stop
+    if (req.url === '/copilot-stop' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.stopCoPilot();
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
+    // POST /api/war-room/prompt-assist
+    if (req.url === '/prompt-assist' && req.method === 'POST') {
+      readBody(async (payload) => {
+        try {
+          const { getWarRoomSession } = await import('./war-room-session.js');
+          const session = getWarRoomSession(payload.projectId);
+          if (!session) return json(404, { error: 'No active war room session' });
+          session.promptAssist(payload.roughDirection);
+          json(200, { ok: true });
+        } catch (e) { json(500, { error: e.message }); }
+      });
+      return;
+    }
+
     // POST /api/war-room/traverse — Gemini vision scout
     if (req.url === '/traverse' && req.method === 'POST') {
       readBody(async (payload) => {
@@ -1151,8 +1193,9 @@ export function createRealmsMiddleware() {
 
         const interval = setInterval(async () => {
           try {
-            const buf = await session.screenshot();
-            res.write(`event: frame\ndata: ${JSON.stringify({ imageBase64: buf.toString('base64') })}\n\n`);
+            // JPEG for SSE stream — 3-5x smaller than PNG, adequate for monitoring
+            const buf = await session.screenshot({ type: 'jpeg', quality: 75, scale: 'css', animations: 'disabled' });
+            res.write(`event: frame\ndata: ${JSON.stringify({ imageBase64: buf.toString('base64'), mimeType: 'image/jpeg' })}\n\n`);
           } catch { clearInterval(interval); }
         }, 3000);
 

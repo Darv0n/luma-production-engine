@@ -84,30 +84,122 @@ export class RealmsSession {
     await this.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
     this.boardId = boardId;
     await this.dismissDialogs();
+    // Wait for agent panel to be ready after navigation
+    await this.waitForAgentPanel();
   }
 
   async navigateToNewBoard() {
     this.ensureAcquired();
-    // Click "Start a board from scratch" from home, or navigate directly
     await this.page.goto(REALMS, { waitUntil: 'networkidle', timeout: 30000 });
     await this.dismissDialogs();
 
-    // Click "Or, start a board from scratch"
-    try {
-      const scratchBtn = this.page.getByRole('button', { name: /start a board from scratch/i });
-      if (await scratchBtn.isVisible({ timeout: 3000 })) {
-        await scratchBtn.click();
-        await this.page.waitForURL('**/board/**', { timeout: 15000 });
+    // If we landed on auth page, wait up to 3 minutes for the user to log in
+    const currentUrl = this.page.url();
+    const onAuthPage = currentUrl.includes('auth.lumalabs.ai') ||
+      currentUrl.includes('sign-in') || currentUrl.includes('sign-up') ||
+      !currentUrl.includes('app.lumalabs.ai');
+
+    if (onAuthPage) {
+      // Wait for user to log in and land on app.lumalabs.ai home or a board
+      try {
+        await this.page.waitForFunction(
+          () => window.location.hostname === 'app.lumalabs.ai' &&
+                !window.location.pathname.startsWith('/auth') &&
+                !window.location.pathname.includes('sign'),
+          { timeout: 180000 } // 3 minutes
+        );
+      } catch {
+        throw new Error('Login timeout — please log in to app.lumalabs.ai in the browser window.');
       }
-    } catch {
-      // Fallback: wait for board URL to appear
+    }
+
+    // Try multiple strategies to navigate to or create a board
+    const strategies = [
+      // 1. "+" new board button in the board list
+      async () => {
+        const btn = this.page.locator('button').filter({ hasText: /^\+$/ }).first();
+        if (await btn.isVisible({ timeout: 2000 })) {
+          await btn.click();
+          await this.page.waitForURL('**/board/**', { timeout: 15000 });
+          return true;
+        }
+        return false;
+      },
+      // 2. Any link/button that says "New board" or "New Board"
+      async () => {
+        const btn = this.page.getByRole('button', { name: /new board/i }).first();
+        if (await btn.isVisible({ timeout: 2000 })) {
+          await btn.click();
+          await this.page.waitForURL('**/board/**', { timeout: 15000 });
+          return true;
+        }
+        return false;
+      },
+      // 3. Navigate to first existing board link on the page
+      async () => {
+        const boardLink = this.page.locator('a[href*="/board/"]').first();
+        if (await boardLink.isVisible({ timeout: 2000 })) {
+          await boardLink.click();
+          await this.page.waitForURL('**/board/**', { timeout: 15000 });
+          return true;
+        }
+        return false;
+      },
+      // 4. Find any href with /board/ and navigate directly
+      async () => {
+        const boardHref = await this.page.evaluate(() => {
+          const a = document.querySelector('a[href*="/board/"]');
+          return a ? a.getAttribute('href') : null;
+        });
+        if (boardHref) {
+          const boardUrl = boardHref.startsWith('http') ? boardHref : `https://app.lumalabs.ai${boardHref}`;
+          await this.page.goto(boardUrl, { waitUntil: 'networkidle', timeout: 20000 });
+          return true;
+        }
+        return false;
+      },
+    ];
+
+    for (const strategy of strategies) {
+      try {
+        if (await strategy()) break;
+      } catch { /* try next */ }
     }
 
     const url = this.page.url();
     const match = url.match(/\/board\/([^/?]+)/);
     this.boardId = match?.[1] || null;
     await this.dismissDialogs();
+    // Wait for the agent panel to be ready
+    await this.waitForAgentPanel();
     return this.boardId;
+  }
+
+  /**
+   * Wait for the Luma Agent panel to be ready (textarea visible).
+   * Called after any board navigation to ensure the UI has loaded.
+   */
+  async waitForAgentPanel(timeout = 15000) {
+    this.ensureAcquired();
+    const page = this.page;
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+      for (const check of [
+        () => page.locator('[placeholder*="want to do"]').first(),
+        () => page.getByPlaceholder('What do you want to do', { exact: false }).first(),
+        () => page.getByRole('textbox').first(),
+        () => page.locator('[contenteditable="true"]').first(),
+      ]) {
+        try {
+          const el = check();
+          if (await el.isVisible({ timeout: 500 })) return true;
+        } catch { /* keep trying */ }
+      }
+      await page.waitForTimeout(1000);
+    }
+    // Timeout reached — panel may not be available, but don't throw
+    return false;
   }
 
   async dismissDialogs() {
@@ -148,8 +240,20 @@ export class RealmsSession {
       } catch { /* try next */ }
     }
 
-    // Last resort: find any visible textarea
-    return page.locator('textarea').last();
+    // Try role-based (works for div[role="textbox"] which Luma uses)
+    try {
+      const byPlaceholder = page.getByPlaceholder('What do you want to do', { exact: false }).first();
+      if (await byPlaceholder.isVisible({ timeout: 2000 })) return byPlaceholder;
+    } catch { /* try next */ }
+
+    // The agent input is the FIRST textbox on the page (role="textbox", div contenteditable)
+    // The second textbox is the "agent" mode label — don't use .last()
+    try {
+      const byRole = page.getByRole('textbox').first();
+      if (await byRole.isVisible({ timeout: 2000 })) return byRole;
+    } catch { /* try next */ }
+
+    return page.locator('[contenteditable="true"]').first();
   }
 
   /**
@@ -171,33 +275,38 @@ export class RealmsSession {
       : null;
 
     // Get input and type
+    // Luma uses div[role="textbox"] (contenteditable) — use fill() which works for role=textbox
     const input = await this.getAgentInput();
     await input.click();
     await input.fill(message);
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
-    // Submit — try multiple strategies
-    const submitSelectors = [
-      'button[type="submit"]',
-      'button[aria-label*="send" i]',
-      'button[aria-label*="submit" i]',
-      '[class*="send"] button',
-      '[class*="submit"] button',
-    ];
-
+    // Submit — Luma's send button has no type="submit" or aria-label, just a plain button
+    // Most reliable: look for any enabled button near the input, fallback to Enter key
     let submitted = false;
-    for (const sel of submitSelectors) {
-      try {
-        const btn = page.locator(sel).last();
-        if (await btn.isEnabled({ timeout: 1000 })) {
-          await btn.click();
-          submitted = true;
-          break;
-        }
-      } catch { /* try next */ }
-    }
 
-    // Fallback: Enter key
+    // Try the send button — it's near the input, enabled after typing
+    try {
+      // Wait briefly for send button to become enabled after fill
+      await page.waitForTimeout(200);
+      const sendSelectors = [
+        'button[type="submit"]',
+        'button[aria-label*="send" i]',
+        'button[aria-label*="submit" i]',
+      ];
+      for (const sel of sendSelectors) {
+        try {
+          const btn = page.locator(sel).last();
+          if (await btn.isEnabled({ timeout: 500 })) {
+            await btn.click();
+            submitted = true;
+            break;
+          }
+        } catch { /* try next */ }
+      }
+    } catch { /* fall through to Enter */ }
+
+    // Primary fallback: Enter key (most reliable for chat inputs)
     if (!submitted) {
       await input.press('Enter');
     }
@@ -386,10 +495,25 @@ export class RealmsSession {
 
   async screenshot(options = {}) {
     this.ensureAcquired();
+
+    // Type: jpeg for SSE stream (3-5x smaller than PNG, adequate for monitoring)
+    //       png for keyframe captures or when lossless is needed
+    const type = options.type || 'jpeg';
+
     return this.page.screenshot({
-      type: 'png',
-      fullPage: options.fullPage || false,
+      type,
+      quality: type === 'jpeg' ? (options.quality ?? 80) : undefined,
+      fullPage: options.fullPage ?? false,
+      scale: options.scale ?? 'css',          // CSS pixels — correct for HiDPI displays
+      animations: 'disabled',                  // stop animations for cleaner frame
+      timeout: options.timeout ?? 10000,
+      ...(options.clip ? { clip: options.clip } : {}),
     });
+  }
+
+  // Higher-quality screenshot for asset capture (War Room keyframe/evaluation use)
+  async screenshotHQ(options = {}) {
+    return this.screenshot({ type: 'png', scale: 'device', ...options });
   }
 
   async getCurrentUrl() {
@@ -403,11 +527,11 @@ export class RealmsSession {
   async checkAuth() {
     try {
       await this.acquire();
-      await this.page.goto(`${REALMS}/realms/new`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await this.page.goto(REALMS, { waitUntil: 'domcontentloaded', timeout: 15000 });
       const url = this.page.url();
-      // If redirected to auth page, not logged in
       const loggedIn = url.includes('app.lumalabs.ai') &&
-        !url.includes('auth') &&
+        !url.includes('auth.lumalabs.ai') &&
+        !url.includes('sign-up') &&
         !url.includes('sign-in') &&
         !url.includes('login');
       return { loggedIn, url };
@@ -459,9 +583,19 @@ export async function openRealmsLogin() {
     await session.acquire();
     await session.page.goto(REALMS, { waitUntil: 'domcontentloaded' });
 
-    // Wait up to 5 minutes for auth to complete
+    // Wait until fully past auth — home dashboard or a board URL
+    // /auth/callback is an intermediate step, not the final destination
     try {
-      await session.page.waitForURL('**/realms/**', { timeout: 300000 });
+      await session.page.waitForFunction(
+        () => window.location.hostname === 'app.lumalabs.ai' &&
+              !window.location.pathname.startsWith('/auth') &&
+              !window.location.pathname.includes('sign-in') &&
+              !window.location.pathname.includes('sign-up') &&
+              (window.location.pathname === '/' || window.location.pathname.startsWith('/board')),
+        { timeout: 300000 }
+      );
+      // Give the page 2s to write final session cookies before closing
+      await new Promise(r => setTimeout(r, 2000));
       return { success: true };
     } catch {
       return { success: false, error: 'Login timeout' };

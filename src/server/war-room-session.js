@@ -70,6 +70,11 @@ export class WarRoomSession {
     this.boardId = null;
     this.platformConnected = false;
 
+    // Co-pilot mode
+    this.coPilotActive = false;
+    this.coPilotInterval = null;
+    this.lastDOMSnapshot = null;
+
     // Data directory
     this.dataDir = path.resolve(process.cwd(), 'data', 'war-room', projectId);
     if (!fs.existsSync(this.dataDir)) fs.mkdirSync(this.dataDir, { recursive: true });
@@ -86,6 +91,7 @@ export class WarRoomSession {
       dialogueCount: this.dialogue.length,
       assetCount: this.assets.length,
       knowledgeCount: this.knowledge.length,
+      coPilotActive: this.coPilotActive,
     };
   }
 
@@ -389,7 +395,7 @@ Your counsel:`;
   }
 
   // Internal: generate + save + emit → returns asset (or null)
-  async geminiGenerateKeyframeAndReturn(imagePrompt) {
+  async geminiGenerateKeyframeAndReturn(imagePrompt, options = {}) {
     if (!this.geminiKey) {
       this.createTurn('gemini', 'message', 'Cannot generate — no Gemini API key.');
       return null;
@@ -397,7 +403,7 @@ Your counsel:`;
 
     try {
       const { generateKeyframe } = await import('../lib/gemini.js');
-      const result = await generateKeyframe(imagePrompt, this.geminiKey);
+      const result = await generateKeyframe(imagePrompt, this.geminiKey, options);
 
       if (!result) {
         this.createTurn('gemini', 'message', 'Keyframe generation returned no image.');
@@ -453,21 +459,31 @@ Arc Position: ${shot.arcPosition || 'unknown'}
 
 Look at this keyframe. It will be used as the STARTING FRAME for Ray3.14 Image-to-Video generation.
 
-Speak as a real critic. Tell me exactly what you see and whether it serves the shot. Be direct — don't hedge.
+TARGET AESTHETIC: Wonder Years warmth. Kodak Portra 400 skin tones, 85mm portrait lens compression,
+soft natural window light. Faces that feel like real people caught on a Tuesday morning — not a
+production still, not stock photography, not an AI render that looks like an AI render.
 
-Then end with a JSON block:
-{"score":0-100,"improvement":"specific change if regenerating, or empty string if approving","verdict":"approve"|"regenerate"}
+Score against:
+1. Composition matches the shot description (framing, distance, subject)
+2. Lighting is practical and motivated — no studio lighting unless brief specifies it
+3. The aesthetic reads as warm/film/documentary, not synthetic/generic
+4. Strong enough starting frame to anchor 5 seconds of I2V motion
 
-Rules:
-- If score >= 75: approve
-- If score < 75 and we have rounds left: regenerate with your improvement note
-- Be vocal. This is a War Room, not a form.`;
+REQUIRED FORMAT — you MUST follow this exactly:
+1. Start with 2-3 sentences of direct critique. What do you actually see? Does it serve the shot? Be blunt.
+2. Then on a new line, output ONLY the JSON: {"score":0-100,"improvement":"what to change if regenerating, else empty","verdict":"approve" or "regenerate"}
+
+Rules: score >= 75 → approve. Be vocal. This is a War Room, not a form.`;
 
     try {
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // System instruction forces prose before JSON — the Pro model without this returns bare JSON
+          system_instruction: {
+            parts: [{ text: 'You are COUNSEL, a hard-nosed film critic. You MUST open your response with 1-3 sentences of direct natural language critique — what you actually see in the image and whether it serves the shot. Never start with JSON. Your prose comes first, then the JSON on its own line at the end.' }],
+          },
           contents: [{
             role: 'user',
             parts: [
@@ -531,15 +547,20 @@ Rules:
     this.createTurn('claude', 'message',
       `Shot ${shot.number} "${shot.name}" — starting keyframe rounds (max ${maxRounds}).`);
 
+    // Portrait orientation suffix — prevents landscape keyframes causing landscape video
+    const PORTRAIT_SUFFIX = ' Portrait orientation 9:16, vertical framing, tall format, phone screen composition.';
+
     for (let round = 1; round <= maxRounds; round++) {
-      const roundPrompt = improvement
-        ? `${shot.keyframePrompt || shot.prompt}. IMPROVE: ${improvement}`
-        : (shot.keyframePrompt || shot.prompt);
+      const base = shot.keyframePrompt || shot.prompt;
+      const roundPrompt = (improvement
+        ? `${base}. IMPROVE: ${improvement}`
+        : base) + PORTRAIT_SUFFIX;
 
       this.createTurn('claude', 'message',
         `Round ${round}/${maxRounds} for Shot ${shot.number} "${shot.name}"...`);
 
-      const asset = await this.geminiGenerateKeyframeAndReturn(roundPrompt);
+      // Pass portrait aspect ratio to Nano Banana
+      const asset = await this.geminiGenerateKeyframeAndReturn(roundPrompt, { aspectRatio: '9:16' });
       if (!asset) break;
 
       const critique = await this.geminiCritiqueKeyframe(asset.imageBase64, shot);
@@ -551,7 +572,8 @@ Rules:
 
       improvement = critique.improvement || '';
 
-      if (critique.score >= 75 || critique.verdict === 'approve' || round >= maxRounds) {
+      // Score >= 75 to approve early. On the last round, take the best we have regardless.
+      if (critique.score >= 75 || round >= maxRounds) {
         this.createTurn('claude', 'message',
           `Shot ${shot.number} approved at round ${round} (${critique.score}/100). Pushing to platform.`);
         break;
@@ -571,18 +593,27 @@ Rules:
 
     // Send shot prompt to Luma agent
     if (this.platformConnected) {
+      // Model routing: Ray3 for face-critical shots (needs Character Reference),
+      // Ray3.14 for everything else (4x faster, 3x cheaper, better stability)
+      const isFaceCritical = shot.characterRef || shot.facelock;
+      const model = isFaceCritical ? 'Ray3' : 'Ray3.14';
+      const modelNote = isFaceCritical
+        ? `Model: Ray3 (face lock required — attach Character Reference image and tag @character in prompt)`
+        : `Model: Ray3.14 (default — fastest, cheapest, best stability)`;
+
       const lumaMessage = `Generate Shot ${shot.number}: "${shot.name}"
 
 Prompt: ${shot.prompt}
 
 Arc: ${shot.arcPosition}
 Duration: 5 seconds
-Model: Ray3.14
+${modelNote}
 Mode: Image-to-Video — use the attached keyframe as the starting frame
-Aspect: 9:16
-${bestAsset ? '(Keyframe reference attached above)' : ''}
+Aspect: 9:16 PORTRAIT (720×1280) — vertical, phone screen. Do not render landscape.
+${bestAsset ? '(Portrait keyframe attached above — maintain its vertical framing throughout)' : ''}
+${shot.endFrame ? '(End frame also attached — interpolate between start and end frames)' : ''}
 
-This is shot ${shot.number} of 4 in the ONYX Espresso 15-second production.`;
+This is shot ${shot.number} of ${(shot.totalShots || 4)} in the production.`;
 
       await this.platformPrompt(lumaMessage);
       await new Promise(r => setTimeout(r, 3000));
@@ -740,7 +771,8 @@ This is ready for review and download.`
 
   async connectPlatform(boardId) {
     try {
-      this.realmsSession = new RealmsSession({ headless: true });
+      // headless: false keeps the auth session alive (auth doesn't persist across headless restarts)
+      this.realmsSession = new RealmsSession({ headless: false, viewport: { width: 1440, height: 900 } });
       await this.realmsSession.acquire();
 
       if (boardId) {
@@ -791,7 +823,7 @@ This is ready for review and download.`
       setTimeout(() => this.captureScreenshot(), 4000);
 
       // Extract learning from this action
-      this.extractLearning('platform-prompt', { prompt: message, genId });
+      this.extractLearning('platform-prompt', { prompt: message });
 
     } catch (e) {
       this.createTurn('claude', 'message', `Platform error: ${e.message}`);
@@ -919,6 +951,256 @@ If nothing noteworthy, return {"observation":null}`;
     return {};
   }
 
+  // ── Co-pilot: Start watch loop ───────────────────────────────────────────
+
+  startCoPilot(boardId) {
+    if (boardId) this.boardId = boardId;
+    this.coPilotActive = true;
+    this.lastDOMSnapshot = null;
+    this.emitState();
+
+    this.createTurn('claude', 'message',
+      'Co-pilot mode active. I\'m watching the canvas. Work in Luma — I\'ll speak up when something needs attention.');
+
+    this.coPilotInterval = setInterval(() => {
+      this.watchTick();
+    }, 15000);
+  }
+
+  // ── Co-pilot: Stop watch loop ────────────────────────────────────────────
+
+  stopCoPilot() {
+    if (this.coPilotInterval) {
+      clearInterval(this.coPilotInterval);
+      this.coPilotInterval = null;
+    }
+    this.coPilotActive = false;
+    this.emitState();
+  }
+
+  // ── Co-pilot: One watch tick ─────────────────────────────────────────────
+
+  async watchTick() {
+    if (!this.realmsSession || !this.platformConnected) return;
+
+    try {
+      // 1. Take screenshot
+      const buf = await this.realmsSession.screenshot();
+      const screenshotB64 = buf.toString('base64');
+
+      // 2. DOM snapshot — frame headings, image alts, chat text, URL
+      const domSnapshot = await this.realmsSession.page.evaluate(() => {
+        const headings = Array.from(document.querySelectorAll('[role="heading"]'))
+          .map(el => el.textContent?.trim())
+          .filter(Boolean)
+          .slice(0, 20);
+
+        const images = Array.from(document.querySelectorAll('img[alt]'))
+          .map(el => el.getAttribute('alt'))
+          .filter(t => t && t.length > 8)
+          .slice(0, 15);
+
+        // Best-effort: agent chat panel text
+        const chatCandidates = Array.from(document.querySelectorAll('[class*="chat"],[class*="agent"],[class*="message"],[class*="response"]'));
+        const chatText = chatCandidates
+          .map(el => el.textContent?.trim())
+          .filter(Boolean)
+          .join(' ')
+          .slice(0, 400);
+
+        return {
+          headings,
+          images,
+          chatText,
+          url: window.location.href,
+        };
+      });
+
+      // 3. Serialize for comparison
+      const snapshotStr = JSON.stringify(domSnapshot);
+
+      // 4. Compare and evaluate if changed
+      if (snapshotStr !== this.lastDOMSnapshot) {
+        await this.evaluateCanvasChange(screenshotB64, domSnapshot, this.lastDOMSnapshot);
+        this.lastDOMSnapshot = snapshotStr;
+      }
+    } catch {
+      // Silent — don't crash the loop
+    }
+  }
+
+  // ── Co-pilot: Evaluate what changed ─────────────────────────────────────
+
+  async evaluateCanvasChange(screenshotB64, currentSnapshot, previousSnapshotStr) {
+    // Build diff string
+    const prev = previousSnapshotStr ? JSON.parse(previousSnapshotStr) : null;
+
+    const newHeadings = prev
+      ? currentSnapshot.headings.filter(h => !prev.headings.includes(h))
+      : currentSnapshot.headings;
+    const newImages = prev
+      ? currentSnapshot.images.filter(i => !prev.images.includes(i))
+      : currentSnapshot.images;
+
+    const diffParts = [];
+    if (newHeadings.length) diffParts.push(`New frames: ${newHeadings.join(', ')}`);
+    if (newImages.length) diffParts.push(`New images: ${newImages.slice(0, 3).join(' | ')}`);
+    if (currentSnapshot.chatText && (!prev || currentSnapshot.chatText !== prev.chatText)) {
+      const excerpt = currentSnapshot.chatText.slice(0, 120);
+      if (excerpt) diffParts.push(`Agent said: "${excerpt}"`);
+    }
+
+    if (!diffParts.length && prev) return; // Nothing substantive changed
+
+    const diffStr = diffParts.join('. ');
+
+    // Small Claude call — max 200 tokens
+    const systemPrompt = `You are the AUTEUR watching the Luma canvas. Something changed. React briefly — one or two sentences MAX. Are we on track? Is the prompt doing what the arc needs? Name the specific change. Don't repeat yourself.`;
+    const userPrompt = `Canvas change detected: ${diffStr || 'Layout or content shifted.'}`;
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 200,
+          temperature: 0.4,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const message = (data.content || []).map(c => c.text || '').join('').trim();
+        if (message) this.createTurn('claude', 'message', message);
+      }
+    } catch {
+      // Silent
+    }
+
+    // If new images detected, run Gemini visual eval
+    if (newImages.length > 0) {
+      this.geminiEvaluateSnapshot(screenshotB64);
+    }
+  }
+
+  // ── Co-pilot: Gemini evaluates a new canvas state ───────────────────────
+
+  async geminiEvaluateSnapshot(screenshotB64) {
+    if (!this.geminiKey) return;
+
+    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+    const url = `${GEMINI_API_BASE}/models/gemini-2.5-flash:generateContent?key=${this.geminiKey}`;
+
+    const platformKnowledge = `Luma Realms: tldraw canvas + AI agent. Models: Ray3.14 (video), Nano Banana (image). Prompt rules: 20-40 words, positive only, one subject/action/camera, secondary motion required, no dead words (vibrant/cinematic/stunning/beautiful/amazing).`;
+
+    const prompt = `${platformKnowledge}\n\nNew content appeared on the Luma canvas. Start your response with a score like "Score: 82." then one specific critique sentence. Reference the actual content you observe.`;
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/png', data: screenshotB64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 150 },
+        }),
+      });
+
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (text.trim()) {
+        // Parse score from "Score: 82." pattern at the start
+        const scoreMatch = text.match(/score[:\s]+(\d+)/i);
+        const score = scoreMatch ? Math.min(100, Math.max(0, parseInt(scoreMatch[1]))) : 0;
+        this.createTurn('gemini', 'evaluation', text.trim(), {
+          evaluation: { score, assessment: text.trim(), recommendation: score >= 75 ? 'approve' : 'review' },
+        });
+      }
+    } catch {
+      // Silent
+    }
+  }
+
+  // ── Co-pilot: Prompt assist ──────────────────────────────────────────────
+
+  async promptAssist(roughDirection) {
+    // Full LUMA1 production rules baked in — this is what makes POLISH actually production-ready
+    const systemPrompt = `You are a Luma Dream Machine production expert. Transform the rough direction into a production-ready Luma prompt.
+
+STRUCTURE (order matters — model reads left to right):
+[Shot type] → [Subject + mid-action verb] → [Secondary motion / physics] → [Camera motion] → [Lighting] → [Mood]. [Equipment prime optional.]
+
+RULES:
+- 20-40 words. Sweet spot: 25-35. Under 20 = model guesses. Over 50 = model ignores late instructions.
+- Positive only. NEVER "no X" or "without X" or "avoid X". Write what IS there.
+- Mid-action verbs only: "running" not "begins to run", "falling" not "starts to fall"
+- ONE subject, ONE action, ONE camera move per prompt
+- Secondary motion is non-negotiable: wind in fabric, reflections, particles, breath — tells the model this is a physical world
+- Shot type is the highest-leverage word: ECU / CU / MCU / MS / MWS / WS / EWS
+
+DEAD WORDS — never use these:
+vibrant, whimsical, hyper-realistic, beautiful, amazing, stunning, cinematic, 8K, 4K, masterpiece, trending, professional, high quality, detailed, best quality, begins to, starts to, about to
+
+EQUIPMENT PRIMES (optional, final polish only):
+Portrait/character: "Kodak Portra 400, 85mm portrait lens"
+Documentary/raw: "35mm handheld, Kodak Vision3 250D"
+Hallway/interior: "16mm film grain, overhead fluorescent"
+Wide/atmospheric: "ARRI Alexa, 24mm wide angle"
+Nostalgic/warm: "Kodak Vision3 250D, soft diffused light"
+
+Return ONLY the polished prompt. No explanation. No preamble.`;
+
+    let polishedPrompt = '';
+    try {
+      polishedPrompt = await this.callClaude(systemPrompt, roughDirection);
+      polishedPrompt = polishedPrompt.trim().replace(/^["']|["']$/g, '');
+    } catch (e) {
+      polishedPrompt = roughDirection;
+    }
+
+    // Model routing — LUMA1: Ray3 ONLY for face-lock across shots. Ray3.14 for everything else.
+    let model = 'Ray3.14';
+    let reason = 'default — 4x faster, 3x cheaper, best stability';
+
+    const lower = roughDirection.toLowerCase();
+    const needsFaceLock = lower.includes('same face') || lower.includes('face lock') || lower.includes('character ref') || lower.includes('matching face') || lower.includes('recurring character') || lower.includes('@character');
+    const hasCharacter = lower.includes('face') || lower.includes('person') || lower.includes('character') || lower.includes('portrait');
+
+    if (needsFaceLock) {
+      model = 'Ray3';
+      reason = 'face lock required — Ray3 + Character Reference is the ONLY reliable method for identity consistency across shots. Upload face photo, tag @character in prompt.';
+    } else if (lower.includes('crowd') || lower.includes('many people') || lower.includes('group of people')) {
+      model = 'Sora 2';
+      reason = 'multi-subject crowd — Sora 2 handles independently moving people without face merging';
+    } else if (lower.includes('nature') || lower.includes('landscape') || lower.includes('aerial') || lower.includes('drone')) {
+      model = 'Veo 3';
+      reason = 'environmental wide shots — Veo 3 excels at large-scale motion and atmosphere';
+    } else if (lower.includes('slow motion') || lower.includes('speed ramp') || lower.includes('timelapse')) {
+      model = 'Kling 3.0';
+      reason = 'temporal effects — Kling 3.0 handles speed ramping and temporal manipulation';
+    } else if (hasCharacter) {
+      model = 'Ray3.14';
+      reason = 'character in frame but no cross-shot face lock needed — Ray3.14 is faster and cheaper. Switch to Ray3 only if same face must match across multiple shots.';
+    }
+
+    this.createTurn('claude', 'prompt-assist', polishedPrompt, {
+      metadata: { model, reason },
+    });
+  }
+
   // ── Controls ────────────────────────────────────────────────────────────
 
   pause() {
@@ -937,6 +1219,13 @@ If nothing noteworthy, return {"observation":null}`;
     this.state = 'complete';
     this.createTurn('claude', 'message', 'War Room session ended.');
     this.emitState();
+
+    // Stop co-pilot if running
+    if (this.coPilotInterval) {
+      clearInterval(this.coPilotInterval);
+      this.coPilotInterval = null;
+      this.coPilotActive = false;
+    }
 
     // Release platform
     if (this.realmsSession) {
@@ -962,4 +1251,3 @@ export function startWarRoomSession(projectId, anthropicKey, geminiKey) {
   session.start();
   return session;
 }
-                                       

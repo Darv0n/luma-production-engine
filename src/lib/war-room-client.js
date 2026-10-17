@@ -62,3 +62,15 @@ export function traverseWithGemini(projectId, goal) {
 export function runProduction(projectId, shots) {
   return post('/run-production', { projectId, shots });
 }
+
+export function startCoPilot(projectId, boardId) {
+  return post('/copilot-start', { projectId, boardId });
+}
+
+export function stopCoPilot(projectId) {
+  return post('/copilot-stop', { projectId });
+}
+
+export function promptAssist(projectId, roughDirection) {
+  return post('/prompt-assist', { projectId, roughDirection });
+}

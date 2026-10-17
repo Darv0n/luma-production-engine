@@ -159,12 +159,15 @@ export async function assembleSequence(shots, options = {}) {
 
     const hasTransitions = transitions.some(t => t.type !== null);
 
+    const filterOpts = {
+      competition: options.competition || false,
+      subtitles: options.subtitles || [],
+    };
+
     if (!hasTransitions) {
-      // Simple concat — no transitions
-      await simpleConcatenate(clipPaths, outputPath, projectId);
+      await simpleConcatenate(clipPaths, outputPath, projectId, filterOpts);
     } else {
-      // xfade filter graph
-      await xfadeConcatenate(clipPaths, durations, transitions, outputPath, projectId);
+      await xfadeConcatenate(clipPaths, durations, transitions, outputPath, projectId, filterOpts);
     }
 
     // ── Phase 3: Audio overlay ────────────────────────────────────────────
@@ -178,6 +181,7 @@ export async function assembleSequence(shots, options = {}) {
         '-y', '-i', outputPath, '-i', audioPath,
         '-c:v', 'copy',
         '-c:a', 'aac', '-b:a', '192k',
+        '-ar', '48000',
         '-map', '0:v:0', '-map', '1:a:0',
         '-shortest',
         withAudioPath,
@@ -197,34 +201,93 @@ export async function assembleSequence(shots, options = {}) {
   }
 }
 
+// ─── Competition output helpers ──────────────────────────────────────────────
+
+/**
+ * Build a video filter chain for competition compliance:
+ *   - Scale to fit within 1920×1080 (preserves aspect ratio)
+ *   - Pad to exactly 1920×1080 with black (pillarbox for 9:16 content)
+ *   - Burned-in subtitles via drawtext
+ *
+ * @param {Array} subtitles - [{ start, end, text }]
+ * @returns {string} FFmpeg -vf filter string
+ */
+function buildCompetitionVideoFilter(subtitles = []) {
+  // Scale to fit 1920×1080, then pad to fill exactly 1920×1080
+  const scaleAndPad = [
+    'scale=1920:1080:force_original_aspect_ratio=decrease',
+    'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black',
+    'fps=24',           // normalize frame rate
+    'format=yuv420p',   // required for H264 compatibility
+  ].join(',');
+
+  if (!subtitles.length) return scaleAndPad;
+
+  // Burn subtitle text using drawtext
+  // Style: LUMA TRANSLATE aesthetic — clean, bold, white, centered, dark shadow
+  const drawtextFilters = subtitles.map(sub => {
+    // Escape special characters for FFmpeg drawtext
+    const escapedText = sub.text
+      .replace(/\\/g, '\\\\')
+      .replace(/:/g, '\\:')
+      .replace(/'/g, "\\'");
+
+    return [
+      'drawtext=',
+      `text='${escapedText}'`,
+      ':font=Arial',
+      ':fontsize=56',
+      ':fontcolor=white',
+      ':fontweight=bold',
+      ':shadowcolor=black@0.8',
+      ':shadowx=2:shadowy=2',
+      // Center horizontally, place at 75% height
+      ':x=(w-text_w)/2',
+      ':y=h*0.75',
+      `:enable='between(t,${sub.start},${sub.end})'`,
+    ].join('');
+  });
+
+  return `${scaleAndPad},${drawtextFilters.join(',')}`;
+}
+
 // ─── Concatenation strategies ────────────────────────────────────────────────
 
 /**
  * Simple concat (no transitions) using concat demuxer.
  */
-async function simpleConcatenate(clipPaths, outputPath, projectId) {
+async function simpleConcatenate(clipPaths, outputPath, projectId, filterOpts = {}) {
   updateProgress(projectId, 'encode', 50, 'Concatenating clips...');
 
   const listPath = outputPath.replace('.mp4', '-list.txt');
   const listContent = clipPaths.map(p => `file '${p.replace(/\\/g, '/')}'`).join('\n');
   fs.writeFileSync(listPath, listContent);
 
-  await execFileAsync('ffmpeg', [
+  const vf = filterOpts.competition
+    ? buildCompetitionVideoFilter(filterOpts.subtitles || [])
+    : null;
+
+  const args = [
     '-y', '-f', 'concat', '-safe', '0',
     '-i', listPath,
+    ...(vf ? ['-vf', vf] : []),
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+    '-profile:v', 'high', '-level', '4.1',     // H264 High profile
+    '-pix_fmt', 'yuv420p',                       // progressive, no interlacing
     '-c:a', 'aac', '-b:a', '192k',
+    '-ar', '48000',                              // 48kHz sample rate (spec requirement)
     '-movflags', '+faststart',
     outputPath,
-  ]);
+  ];
 
+  await execFileAsync('ffmpeg', args, { timeout: 300000 });
   try { fs.unlinkSync(listPath); } catch { /* cleanup */ }
 }
 
 /**
  * xfade concatenation with per-shot transitions.
  */
-async function xfadeConcatenate(clipPaths, durations, transitions, outputPath, projectId) {
+async function xfadeConcatenate(clipPaths, durations, transitions, outputPath, projectId, filterOpts = {}) {
   updateProgress(projectId, 'transitions', 40, 'Applying transitions...');
 
   // Build complex filter graph
@@ -263,15 +326,47 @@ async function xfadeConcatenate(clipPaths, durations, transitions, outputPath, p
   for (const cp of clipPaths) {
     args.push('-i', cp);
   }
+  // For competition mode, apply scale+pad+subtitles after the xfade graph
+  const postFilter = filterOpts.competition
+    ? buildCompetitionVideoFilter(filterOpts.subtitles || [])
+    : null;
+
   args.push(
     '-filter_complex', filterGraph,
     '-map', `[vout]`,
+    ...(postFilter ? ['-vf', postFilter] : []),
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+    '-profile:v', 'high', '-level', '4.1',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-ar', '48000',
     '-movflags', '+faststart',
     '-y', outputPath,
   );
 
   await execFileAsync('ffmpeg', args, { timeout: 300000 });
+}
+
+/**
+ * Competition-ready assembly.
+ * Enforces all competition spec requirements:
+ *   - H264 High profile, yuv420p progressive
+ *   - 1920×1080 max (pillarbox 9:16 content)
+ *   - 48kHz AAC audio ≥192kbps
+ *   - Subtitles burned into image
+ *   - Multiplexed MP4
+ *
+ * @param {Array} shots - Array of { videoUrl, cutType, name }
+ * @param {Array} subtitles - [{ start, end, text }] — translations burned in
+ * @param {Object} options - { projectId, audioTrackUrl?, outputName? }
+ */
+export async function competitionAssemble(shots, subtitles = [], options = {}) {
+  return assembleSequence(shots, {
+    ...options,
+    competition: true,
+    subtitles,
+    outputName: options.outputName || 'competition-final.mp4',
+  });
 }
 
 /**

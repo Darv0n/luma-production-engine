@@ -32,6 +32,62 @@ export default function WarRoomMessage({ turn, onPushToPlatform }) {
   const label = ROLE_LABELS[turn.role] || turn.role.toUpperCase();
   const isHuman = turn.role === 'human';
   const badge = TYPE_BADGES[turn.type];
+  const time = new Date(turn.timestamp).toLocaleTimeString();
+
+  // ── Prompt-assist special render ──────────────────────────────────────────
+  if (turn.type === 'prompt-assist') {
+    const wrapper = {
+      maxWidth: '85%',
+      padding: '10px 14px',
+      borderRadius: '4px',
+      background: 'rgba(255,255,255,0.02)',
+      border: `1px solid ${ROLE_COLORS.claude}22`,
+      marginBottom: '12px',
+    };
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: '12px', animation: 'fadeIn 0.3s ease' }}>
+        <div style={{ ...wrapper, borderLeft: `2px solid ${ROLE_COLORS.claude}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '8px', letterSpacing: '2px', color: ROLE_COLORS.claude }}>
+              AUTEUR · PROMPT
+            </span>
+            <span style={{ fontFamily: FONTS.mono, fontSize: '7px', color: COLORS.textDim }}>{time}</span>
+          </div>
+          <div style={{
+            background: 'rgba(184,156,74,0.06)',
+            border: '1px solid rgba(184,156,74,0.2)',
+            borderRadius: '3px',
+            padding: '10px 12px',
+            marginBottom: '8px',
+            fontFamily: FONTS.mono,
+            fontSize: '11px',
+            lineHeight: '1.6',
+            color: COLORS.text,
+          }}>
+            {turn.message}
+          </div>
+          {turn.metadata?.model && (
+            <div style={{ fontFamily: FONTS.mono, fontSize: '8px', color: COLORS.textDim, marginBottom: '8px' }}>
+              {turn.metadata.model} — {turn.metadata.reason}
+            </div>
+          )}
+          <button
+            onClick={() => navigator.clipboard.writeText(turn.message)}
+            style={{
+              ...S.btnSec,
+              fontSize: '7px',
+              padding: '3px 8px',
+              letterSpacing: '1px',
+              color: ROLE_COLORS.claude,
+              borderColor: 'rgba(184,156,74,0.3)',
+            }}
+          >
+            COPY PROMPT
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
